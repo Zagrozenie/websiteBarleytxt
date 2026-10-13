@@ -1,0 +1,22 @@
+{
+  "name": "barleytxt.pl",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "canvas": "^3.2.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^4.19.2",
+    "jszip": "^3.10.1",
+    "mongoose": "^8.0.0",
+    "multer": "^2.1.1",
+    "socket.io": "^4.7.5"
+  }
+}
