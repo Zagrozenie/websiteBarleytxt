@@ -1,0 +1,4 @@
+User-agent: *
+Disallow:
+
+Sitemap: https://barleytxt.pl/sitemap.xml
