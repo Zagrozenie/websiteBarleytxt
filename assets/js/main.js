@@ -1,4 +1,4 @@
-const originalTitle = document.title;
+let originalTitle = document.title;
 
 const translations = {
   pl: {
