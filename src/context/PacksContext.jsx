@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { useToast } from './ToastContext';
 import { useAuth } from './AuthContext';
+import { API_BASE, SOCKET_URL } from '../config';
 
 const PacksContext = createContext();
 
@@ -13,14 +14,25 @@ export const PacksProvider = ({ children }) => {
   const [sortBy, setSortBy] = useState('popular');
   const [activePack, setActivePack] = useState(null);
   
-  const [totalDownloads, setTotalDownloads] = useState(148500);
-  const [onlineDiscord, setOnlineDiscord] = useState(420);
+  // Real dynamic stats initialized to 0 (no static hardcoded values)
+  const [totalDownloads, setTotalDownloads] = useState(0);
+  const [websiteOnline, setWebsiteOnline] = useState(0);
+  const [discordOnline, setDiscordOnline] = useState(0);
   
   const { addToast } = useToast();
   const { adminToken } = useAuth();
 
+  // Helper from legacy for formatting numbers: 14.5K, 1.2M, etc.
+  const formatStatNumber = (num) => {
+    if (!num || isNaN(num) || num <= 0) return '0';
+    if (num >= 999500) return (num / 1e6).toFixed(1).replace('.0', '') + 'M';
+    if (num >= 1e3) return (num / 1e3).toFixed(1).replace('.0', '') + 'K';
+    return num.toString();
+  };
+
   useEffect(() => {
     let isMounted = true;
+    let socket = null;
 
     async function loadData() {
       setLoading(true);
@@ -29,11 +41,18 @@ export const PacksProvider = ({ children }) => {
 
         // Try API first
         try {
-          const res = await fetch('/api/packs');
+          const res = await fetch(`${API_BASE}/api/packs`);
           if (res.ok) {
             packsData = await res.json();
           }
         } catch (_) {}
+
+        if (!packsData) {
+          try {
+            const res = await fetch('/api/packs');
+            if (res.ok) packsData = await res.json();
+          } catch (_) {}
+        }
 
         // Fallback to static JSON
         if (!packsData || !Array.isArray(packsData)) {
@@ -50,7 +69,6 @@ export const PacksProvider = ({ children }) => {
             try {
               const custom = JSON.parse(localStored);
               if (Array.isArray(custom)) {
-                // Merge unique custom packs
                 const existingIds = new Set(packsData.map(p => p.id));
                 const additions = custom.filter(p => !existingIds.has(p.id));
                 packsData = [...additions, ...packsData];
@@ -64,28 +82,117 @@ export const PacksProvider = ({ children }) => {
       } finally {
         if (isMounted) setLoading(false);
       }
+    }
 
-      // Fetch downloads
+    // 1. User ID matching legacy main.js
+    let userId = null;
+    try {
+      userId = localStorage.getItem('userId');
+      if (!userId) {
+        userId =
+          typeof crypto.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, (char) =>
+                (char ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (char / 4)))).toString(16),
+              );
+        localStorage.setItem('userId', userId);
+      }
+    } catch (_) {}
+
+    // 2. Real-time website online counter via Socket.io matching legacy
+    try {
+      const ioFunc = window.io;
+      if (typeof ioFunc === 'function') {
+        socket = ioFunc(SOCKET_URL, {
+          query: { userId: userId || 'visitor' },
+          transports: ['websocket', 'polling']
+        });
+        socket.on('online-users', (count) => {
+          if (isMounted && typeof count === 'number') {
+            setWebsiteOnline(count);
+          }
+        });
+      }
+    } catch (_) {}
+
+    // 3. Discord online counter from official widget (fallback to API) matching legacy main.js
+    async function updateDiscordOnline() {
+      try {
+        const response = await fetch(
+          'https://discord.com/api/guilds/1193548424847568938/widget.json',
+          { cache: 'no-store' }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          if (isMounted && typeof data.presence_count === 'number') {
+            setDiscordOnline(data.presence_count);
+            return;
+          }
+        }
+      } catch (_) {}
+
+      try {
+        const response = await fetch(`${API_BASE}/online`);
+        if (response.ok) {
+          const data = await response.json();
+          if (isMounted && typeof data.online === 'number') {
+            setDiscordOnline(data.online);
+            return;
+          }
+        }
+      } catch (_) {}
+
+      try {
+        const response = await fetch('/online');
+        if (response.ok) {
+          const data = await response.json();
+          if (isMounted && typeof data.online === 'number') {
+            setDiscordOnline(data.online);
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 4. Total downloads counter from live API matching legacy main.js
+    async function loadTotalDownloads() {
+      try {
+        const res = await fetch(`${API_BASE}/total-downloads`);
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && typeof data.totalDownloads === 'number') {
+            setTotalDownloads(data.totalDownloads);
+            return;
+          }
+        }
+      } catch (_) {}
+
       try {
         const res = await fetch('/total-downloads');
         if (res.ok) {
           const data = await res.json();
-          if (data.totalDownloads && isMounted) setTotalDownloads(data.totalDownloads);
-        }
-      } catch (_) {}
-
-      // Fetch online users
-      try {
-        const res = await fetch('/online');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.online && isMounted) setOnlineDiscord(data.online);
+          if (isMounted && typeof data.totalDownloads === 'number') {
+            setTotalDownloads(data.totalDownloads);
+          }
         }
       } catch (_) {}
     }
 
     loadData();
-    return () => { isMounted = false; };
+    updateDiscordOnline();
+    loadTotalDownloads();
+
+    const interval = setInterval(() => {
+      updateDiscordOnline();
+      loadTotalDownloads();
+    }, 30000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+      if (socket && typeof socket.disconnect === 'function') {
+        socket.disconnect();
+      }
+    };
   }, []);
 
   // Filter and sort packs
@@ -244,6 +351,8 @@ export const PacksProvider = ({ children }) => {
     }
   };
 
+  const onlineUsers = (websiteOnline || 0) + (discordOnline || 0);
+
   return (
     <PacksContext.Provider value={{
       packs,
@@ -260,7 +369,11 @@ export const PacksProvider = ({ children }) => {
       activePack,
       setActivePack,
       totalDownloads,
-      onlineDiscord,
+      onlineUsers,
+      onlineDiscord: discordOnline,
+      websiteOnline,
+      discordOnline,
+      formatStatNumber,
       addPack,
       updatePack,
       deletePack,
