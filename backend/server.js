@@ -122,12 +122,13 @@ io.on("connection", (socket) => {
     if (current <= 1) {
       userConnections.delete(userId);
     } else {
-      userConnections.set(userId, currenta - 1);
+      userConnections.set(userId, current - 1);
     }
 
     io.emit("online-users", userConnections.size);
   });
 });
+
 
 const StatSchema = new mongoose.Schema({
   packId: {
@@ -605,7 +606,7 @@ app.get("/online", async (req, res) => {
         path: "/api/guilds/1193548424847568938/widget.json",
         method: "GET",
         headers: {
-          "User-Agent": "BarleyTxT-Dev/1.0 (+http://localhost:3000)",
+          "User-Agent": "BarleyTxT/1.0 (+https://barleytxt.pl)",
           "Accept": "application/json"
         }
       };

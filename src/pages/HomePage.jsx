@@ -7,7 +7,7 @@ import { PartnersSection } from '../components/PartnersSection';
 
 export const HomePage = ({ setCurrentView }) => {
   const { lang, t } = useLanguage();
-  const { packs, totalDownloads, onlineDiscord, setActivePack } = usePacks();
+  const { packs, totalDownloads, onlineUsers, setActivePack, formatStatNumber } = usePacks();
 
   // Typewriter effect matching original script:
   // "Odkryj <span class='underline'>wysokiej</span> jakości<br> Paczki zasobów"
@@ -210,8 +210,8 @@ export const HomePage = ({ setCurrentView }) => {
                 </svg>
               </div>
               <div className="statistics-content">
-                <span id="online-user">{onlineDiscord || 14}</span>
-                <p>Graczy online w społeczności</p>
+                <span id="online-user">{onlineUsers}</span>
+                <p>{t.stats?.onlineUsers || 'Online w społeczności'}</p>
               </div>
               <div className="statistics-blur"></div>
             </div>
@@ -226,8 +226,8 @@ export const HomePage = ({ setCurrentView }) => {
                 </svg>
               </div>
               <div className="statistics-content">
-                <span id="total-download-count">{totalDownloads.toLocaleString()}</span>
-                <p>Pobranych paczek łącznie</p>
+                <span id="total-download-count">{formatStatNumber(totalDownloads)}</span>
+                <p>{t.stats?.downloads || 'Pobranych texturepacków'}</p>
               </div>
               <div className="statistics-blur"></div>
             </div>
