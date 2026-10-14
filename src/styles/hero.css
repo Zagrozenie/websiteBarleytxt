@@ -1,0 +1,145 @@
+.hero-section {
+  padding: 5rem 0 3.5rem;
+  text-align: center;
+  position: relative;
+}
+
+.hero-content {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.hero-title {
+  font-family: var(--font-heading);
+  font-size: 3.5rem;
+  font-weight: 900;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  margin-bottom: 1.5rem;
+  min-height: 4.5rem;
+  color: #ffffff;
+}
+
+.hero-highlight {
+  position: relative;
+  display: inline-block;
+  background: linear-gradient(135deg, #60a5fa 20%, #38bdf8 80%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.hero-cursor {
+  display: inline-block;
+  width: 4px;
+  height: 1em;
+  background-color: #3b82f6;
+  margin-left: 4px;
+  vertical-align: middle;
+  animation: blink 0.8s infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.hero-desc {
+  font-size: 1.1875rem;
+  line-height: 1.7;
+  color: var(--text-muted);
+  max-width: 680px;
+  margin: 0 auto 2.5rem;
+}
+
+.hero-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 2.75rem;
+}
+
+.btn-yt {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  color: #ffffff;
+  box-shadow: 0 4px 20px rgba(220, 38, 38, 0.35);
+}
+
+.btn-yt:hover {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(220, 38, 38, 0.5);
+}
+
+.btn-discord {
+  background: linear-gradient(135deg, #5865f2, #4752c4);
+  color: #ffffff;
+  box-shadow: 0 4px 20px rgba(88, 101, 242, 0.35);
+}
+
+.btn-discord:hover {
+  background: linear-gradient(135deg, #7289da, #5865f2);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(88, 101, 242, 0.5);
+}
+
+/* Discord Ad Banner */
+.discord-promo-card {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 0.875rem 1.5rem;
+  background: rgba(88, 101, 242, 0.08);
+  border: 1px solid rgba(88, 101, 242, 0.25);
+  border-radius: var(--radius-full);
+  text-decoration: none;
+  transition: var(--transition);
+  max-width: 620px;
+  width: 100%;
+}
+
+.discord-promo-card:hover {
+  background: rgba(88, 101, 242, 0.16);
+  border-color: rgba(88, 101, 242, 0.45);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(88, 101, 242, 0.2);
+}
+
+.discord-promo-text {
+  font-size: 0.875rem;
+  color: #e2e8f0;
+  text-align: left;
+}
+
+.discord-promo-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #818cf8;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .hero-title {
+    font-size: 2.25rem;
+  }
+  .hero-buttons {
+    flex-direction: column;
+    width: 100%;
+  }
+  .hero-buttons .btn {
+    width: 100%;
+  }
+  .discord-promo-card {
+    flex-direction: column;
+    text-align: center;
+    border-radius: var(--radius-lg);
+  }
+  .discord-promo-text {
+    text-align: center;
+  }
+}

@@ -1,0 +1,33 @@
+/* ==========================================================================
+   BarleyTxT.pl - Core Index Styles & Modern Overlays
+   To revert frontend styles to legacy original: simply comment out the line below!
+   ========================================================================== */
+@import './modern-frontend.css';
+
+.app-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  position: relative;
+  z-index: 1;
+}
+
+.main-content {
+  flex: 1;
+  min-height: calc(100vh - 200px);
+}
+
+/* Ensure links styled as nav-link don't get default underlines */
+.nav-link {
+  cursor: pointer;
+}
+
+/* Modal and utility transitions */
+.modal-backdrop-fade {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
