@@ -27,17 +27,21 @@ const app = express();
 app.set("trust proxy", true);
 
 const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:3000",
-  "http://127.0.0.1:5173",
-  "http://127.0.0.1:3000"
+  "https://barleytxt.pl",
+  "http://barleytxt.pl",
+  "https://www.barleytxt.pl",
+  "http://www.barleytxt.pl"
 ];
 
-const _ALLOWED_HOSTS = ["localhost", "127.0.0.1"];
+const _ALLOWED_HOSTS = [
+  "barleytxt.pl",
+  "www.barleytxt.pl"
+];
 function _isHostAllowed(urlStr) {
   if (!urlStr) return false;
   try {
-    const u = new URL(urlStr);
+    const raw = urlStr.includes("://") ? urlStr : `http://${urlStr}`;
+    const u = new URL(raw);
     const host = u.hostname.toLowerCase();
     for (const allowed of _ALLOWED_HOSTS) {
       const a = allowed.toLowerCase();

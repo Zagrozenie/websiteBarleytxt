@@ -12,35 +12,16 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:3000',
-        changeOrigin: true
-      },
-      '/convert': {
-        target: 'http://localhost:3000',
-        changeOrigin: true
-      },
-      '/total-downloads': {
-        target: 'http://localhost:3000',
-        changeOrigin: true
-      },
-      '/stats': {
-        target: 'http://localhost:3000',
-        changeOrigin: true
-      },
-      '/view': {
-        target: 'http://localhost:3000',
-        changeOrigin: true
-      },
-      '/download': {
-        target: 'http://localhost:3000',
-        changeOrigin: true
-      },
-      '/online': {
-        target: 'http://localhost:3000',
-        changeOrigin: true
-      }
-    }
+    allowedHosts: [
+      'barleytxt.pl',
+      '.barleytxt.pl'
+    ]
+  },
+  preview: {
+    port: 5173,
+    allowedHosts: [
+      'barleytxt.pl',
+      '.barleytxt.pl'
+    ]
   }
 });
