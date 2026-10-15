@@ -30,12 +30,18 @@ const allowedOrigins = [
   "https://barleytxt.pl",
   "http://barleytxt.pl",
   "https://www.barleytxt.pl",
-  "http://www.barleytxt.pl"
+  "http://www.barleytxt.pl",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:3000",
+  "http://127.0.0.1:3000"
 ];
 
 const _ALLOWED_HOSTS = [
   "barleytxt.pl",
-  "www.barleytxt.pl"
+  "www.barleytxt.pl",
+  "localhost",
+  "127.0.0.1"
 ];
 function _isHostAllowed(urlStr) {
   if (!urlStr) return false;
@@ -404,13 +410,20 @@ app.post("/download/:packId", async (req, res) => {
 
 app.get("/total-downloads", async (req, res) => {
   try {
-    const stats = await Stat.find({});
+    if (mongoose.connection.readyState === 1) {
+      const stats = await Stat.find({});
+      const totalDownloads = stats.reduce(
+        (sum, s) => sum + (s.downloads || 0),
+        0
+      );
+      return res.json({ totalDownloads });
+    }
 
-    const totalDownloads = stats.reduce(
-      (sum, s) => sum + (s.downloads || 0),
-      0
-    );
-
+    let totalDownloads = 0;
+    try {
+      const localStats = JSON.parse(fs.readFileSync(path.join(__dirname, "pack_downloads.json"), "utf8"));
+      totalDownloads = Object.values(localStats).reduce((a, b) => a + b, 0);
+    } catch (_) { }
     res.json({ totalDownloads });
 
   } catch (error) {
@@ -737,6 +750,7 @@ const reservedSlugs = [
   "terms-of-service", "terms-of-service.html",
   "unlock", "unlock.html",
   "texturepacks",
+  "texturepack",
   "texturepacks.json",
   "robots.txt",
   "sitemap.xml",
@@ -777,26 +791,40 @@ const ADMIN_SECRET = process.env.ADMIN_KEY || "barleyadmin2024";
 
 function getLocalPacks() {
   const backendPacksPath = path.join(__dirname, "texturepacks.json");
-  const rootPacksPath = path.join(__dirname, "..", "texturepacks.json");
-  let filePath = fs.existsSync(backendPacksPath) ? backendPacksPath : rootPacksPath;
-  try {
-    const raw = fs.readFileSync(filePath, "utf8");
-    return JSON.parse(raw);
-  } catch (e) {
-    return [];
+  const publicPacksPath = path.join(WEBSITE_ROOT, "public", "texturepacks.json");
+  const rootPacksPath = path.join(WEBSITE_ROOT, "texturepacks.json");
+
+  const candidates = [backendPacksPath, publicPacksPath, rootPacksPath];
+  for (const filePath of candidates) {
+    if (fs.existsSync(filePath)) {
+      try {
+        const raw = fs.readFileSync(filePath, "utf8");
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      } catch (_) { }
+    }
   }
+  return [];
 }
 
 function saveLocalPacks(packs) {
   const data = JSON.stringify(packs, null, 2);
-  const backendPacksPath = path.join(__dirname, "texturepacks.json");
-  const rootPacksPath = path.join(__dirname, "..", "texturepacks.json");
-  try {
-    fs.writeFileSync(backendPacksPath, data, "utf8");
-  } catch (_) { }
-  try {
-    fs.writeFileSync(rootPacksPath, data, "utf8");
-  } catch (_) { }
+  const targets = [
+    path.join(__dirname, "texturepacks.json"),
+    path.join(WEBSITE_ROOT, "public", "texturepacks.json"),
+    path.join(WEBSITE_ROOT, "texturepacks.json"),
+    path.join(WEBSITE_ROOT, "dist", "texturepacks.json")
+  ];
+  for (const targetPath of targets) {
+    try {
+      const parentDir = path.dirname(targetPath);
+      if (fs.existsSync(parentDir)) {
+        fs.writeFileSync(targetPath, data, "utf8");
+      }
+    } catch (_) { }
+  }
 }
 
 function requireAdmin(req, res, next) {
@@ -818,9 +846,65 @@ app.post("/api/admin/login", (req, res) => {
   return res.status(401).json({ error: "Nieprawidłowe hasło administratora" });
 });
 
-app.get("/api/packs", (req, res) => {
-  const packs = getLocalPacks();
-  res.json(packs);
+app.get("/api/packs", async (req, res) => {
+  try {
+    const packs = getLocalPacks();
+    if (mongoose.connection.readyState === 1) {
+      const stats = await Stat.find({}, "packId downloads views").lean();
+      const statsMap = new Map(stats.map((s) => [s.packId, s]));
+      const enriched = packs.map((p) => {
+        const s = statsMap.get(p.id);
+        return {
+          ...p,
+          downloads: s?.downloads || 0,
+          views: s?.views || 0,
+        };
+      });
+      return res.json(enriched);
+    }
+
+    let localStats = {};
+    try {
+      localStats = JSON.parse(fs.readFileSync(path.join(__dirname, "pack_downloads.json"), "utf8"));
+    } catch (_) { }
+    const enriched = packs.map((p) => ({
+      ...p,
+      downloads: localStats[p.id] || 0,
+      views: 0,
+    }));
+    res.json(enriched);
+  } catch (err) {
+    res.json(getLocalPacks());
+  }
+});
+
+app.get("/api/packs/popular", async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit, 10) || 9;
+    const packs = getLocalPacks();
+    let statsMap = new Map();
+    if (mongoose.connection.readyState === 1) {
+      const stats = await Stat.find({}, "packId downloads views").lean();
+      statsMap = new Map(stats.map((s) => [s.packId, s]));
+    } else {
+      try {
+        const localStats = JSON.parse(fs.readFileSync(path.join(__dirname, "pack_downloads.json"), "utf8"));
+        statsMap = new Map(Object.entries(localStats).map(([id, dl]) => [id, { downloads: dl, views: 0 }]));
+      } catch (_) { }
+    }
+    const enriched = packs.map((p) => {
+      const s = statsMap.get(p.id);
+      return {
+        ...p,
+        downloads: s?.downloads || 0,
+        views: s?.views || 0,
+      };
+    });
+    enriched.sort((a, b) => (b.downloads || 0) - (a.downloads || 0));
+    res.json(enriched.slice(0, limit));
+  } catch (err) {
+    res.status(500).json({ error: "Błąd serwera" });
+  }
 });
 
 // Admin upload Minecraft pack .zip file
@@ -917,6 +1001,58 @@ app.post("/api/admin/upload-pack", requireAdmin, upload.single("packFile"), asyn
   }
 });
 
+// Admin upload pack image (background or icon) with permanent disk storage
+app.post("/api/admin/upload-image", requireAdmin, upload.single("image"), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "Brak przesłanego pliku graficznego" });
+    }
+
+    const packId = (req.body.packId || `pack_${Date.now()}`)
+      .toString()
+      .trim()
+      .replace(/[^\w\s-]/gi, "")
+      .replace(/\s+/g, "_")
+      .toLowerCase();
+
+    const type = req.body.type === "icon" ? "icon" : "background";
+
+    let ext = path.extname(req.file.originalname || "").toLowerCase();
+    if (![".png", ".webp", ".jpg", ".jpeg"].includes(ext)) {
+      ext = ".png";
+    }
+
+    const fileName = `${type}${ext}`;
+
+    const targetDirs = [
+      path.join(WEBSITE_ROOT, "public", "assets", "img", "texturepacks", packId),
+      path.join(WEBSITE_ROOT, "assets", "img", "texturepacks", packId)
+    ];
+
+    for (const dir of targetDirs) {
+      try {
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+        fs.writeFileSync(path.join(dir, fileName), req.file.buffer);
+      } catch (e) {
+        console.warn("Nie udało się zapisać zdjęcia w:", dir, e.message);
+      }
+    }
+
+    const publicUrl = `/assets/img/texturepacks/${packId}/${fileName}`;
+    return res.json({
+      success: true,
+      url: publicUrl,
+      fileName,
+      packId
+    });
+  } catch (err) {
+    console.error("Image upload error:", err);
+    res.status(500).json({ error: "Błąd podczas zapisywania zdjęcia: " + err.message });
+  }
+});
+
 app.post("/api/admin/packs", requireAdmin, (req, res) => {
   try {
     const { name, author, version, category, download, image, icon } = req.body;
@@ -957,7 +1093,7 @@ app.put("/api/admin/packs/:id", requireAdmin, (req, res) => {
   try {
     const packId = req.params.id;
     const packs = getLocalPacks();
-    const index = packs.findIndex(p => p.id === packId);
+    const index = packs.findIndex(p => p.id === packId || p.id?.toLowerCase() === packId.toLowerCase());
 
     if (index === -1) {
       return res.status(404).json({ error: "Nie znaleziono paczki" });
@@ -966,7 +1102,7 @@ app.put("/api/admin/packs/:id", requireAdmin, (req, res) => {
     const updated = {
       ...packs[index],
       ...req.body,
-      id: packId
+      id: packs[index].id
     };
 
     packs[index] = updated;
@@ -978,36 +1114,92 @@ app.put("/api/admin/packs/:id", requireAdmin, (req, res) => {
   }
 });
 
-app.delete("/api/admin/packs/:id", requireAdmin, (req, res) => {
+app.delete("/api/admin/packs/:id", requireAdmin, async (req, res) => {
   try {
-    const packId = req.params.id;
+    const rawId = req.params.id;
+    const packId = decodeURIComponent(rawId).trim();
+    const cleanId = packId.toLowerCase().replace(/[-_ ]/g, "");
+
     let packs = getLocalPacks();
     const initialLen = packs.length;
-    packs = packs.filter(p => p.id !== packId);
+
+    packs = packs.filter((p) => {
+      if (!p) return false;
+      const pid = (p.id || "").toString().trim();
+      const pidLower = pid.toLowerCase();
+      const pidClean = pidLower.replace(/[-_ ]/g, "");
+      return pid !== packId && pidLower !== packId.toLowerCase() && pidClean !== cleanId;
+    });
 
     if (packs.length === initialLen) {
       return res.status(404).json({ error: "Nie znaleziono paczki o podanym ID" });
     }
 
     saveLocalPacks(packs);
+
+    // Usuń przypisany folder ze zdjęciami, jeśli istniał
+    const safePackId = packId.replace(/[^\w\s-]/gi, "").replace(/\s+/g, "_").toLowerCase();
+    const dirsToDelete = [
+      path.join(WEBSITE_ROOT, "public", "assets", "img", "texturepacks", safePackId),
+      path.join(WEBSITE_ROOT, "assets", "img", "texturepacks", safePackId)
+    ];
+    for (const d of dirsToDelete) {
+      try {
+        if (fs.existsSync(d)) {
+          fs.rmSync(d, { recursive: true, force: true });
+        }
+      } catch (_) { }
+    }
+
+    // Wyczyść statystyki pobrań
+    try {
+      const statsFile = path.join(__dirname, "pack_downloads.json");
+      if (fs.existsSync(statsFile)) {
+        const stats = JSON.parse(fs.readFileSync(statsFile, "utf8"));
+        delete stats[packId];
+        delete stats[rawId];
+        fs.writeFileSync(statsFile, JSON.stringify(stats, null, 2), "utf8");
+      }
+    } catch (_) { }
+
+    if (mongoose.connection.readyState === 1) {
+      try {
+        await Stat.deleteMany({ packId: { $in: [packId, rawId] } });
+      } catch (_) { }
+    }
+
     res.json({ success: true, id: packId, remainingCount: packs.length });
   } catch (err) {
+    console.error("Pack delete error:", err);
     res.status(500).json({ error: "Błąd podczas usuwania paczki" });
   }
 });
 
 app.get("/stats/:packId", checkOrigin, async (req, res) => {
   try {
-    const stat = await Stat.findOne({
-      packId: req.params.packId
-    });
+    if (mongoose.connection.readyState === 1) {
+      const stat = await Stat.findOne({
+        packId: req.params.packId
+      });
 
-    res.json(
-      stat || {
-        views: 0,
-        downloads: 0
-      }
-    );
+      return res.json(
+        stat || {
+          views: 0,
+          downloads: 0
+        }
+      );
+    }
+
+    let dl = 0;
+    try {
+      const localStats = JSON.parse(fs.readFileSync(path.join(__dirname, "pack_downloads.json"), "utf8"));
+      dl = localStats[req.params.packId] || 0;
+    } catch (_) { }
+
+    res.json({
+      views: 0,
+      downloads: dl
+    });
 
   } catch (err) {
     res.status(500).send("Błąd serwera");
@@ -1019,31 +1211,90 @@ app.get("/api/check-whitelist", checkOrigin, async (req, res) => {
   res.json({ whitelisted });
 });
 
-app.get("/en/texturepacks/:packId", async (req, res, next) => {
-  try {
-    const packId = req.params.packId;
-    return res.sendFile(path.join(__dirname, "..", "en", "texturepacks", "pack.html"));
-  } catch (err) {
-    return next();
+function getIndexHtml() {
+  const distIndex = path.join(WEBSITE_ROOT, "dist", "index.html");
+  const rootIndex = path.join(WEBSITE_ROOT, "index.html");
+  if (fs.existsSync(distIndex)) {
+    return fs.readFileSync(distIndex, "utf8");
   }
-});
+  if (fs.existsSync(rootIndex)) {
+    return fs.readFileSync(rootIndex, "utf8");
+  }
+  return null;
+}
 
-app.get("/de/texturepacks/:packId", async (req, res, next) => {
-  try {
-    const packId = req.params.packId;
-    return res.sendFile(path.join(__dirname, "..", "de", "texturepacks", "pack.html"));
-  } catch (err) {
-    return next();
-  }
-});
+function servePackHtml(req, res, packId) {
+  const packs = getLocalPacks();
+  const slug = (packId || "").trim();
+  const decoded = decodeURIComponent(slug).toLowerCase();
+  const clean = decoded.replace(/[-_ ]/g, "");
 
-app.get("/texturepacks/:packId", async (req, res, next) => {
-  try {
-    const packId = req.params.packId;
-    return res.sendFile(path.join(__dirname, "..", "texturepacks", "pack.html"));
-  } catch (err) {
-    return next();
+  const pack = packs.find(
+    (p) =>
+      p.id === slug ||
+      p.id?.toLowerCase() === decoded ||
+      p.id?.toLowerCase().replace(/[-_ ]/g, "") === clean ||
+      p.name?.toLowerCase() === decoded ||
+      p.name?.toLowerCase().replace(/[-_ ]/g, "") === clean
+  );
+
+  let html = getIndexHtml();
+  if (!html) {
+    const fallbackPath = fs.existsSync(path.join(WEBSITE_ROOT, "dist", "index.html"))
+      ? path.join(WEBSITE_ROOT, "dist", "index.html")
+      : path.join(WEBSITE_ROOT, "index.html");
+    return res.sendFile(fallbackPath);
   }
+
+  if (pack) {
+    const packTitle = `${pack.name} — Texturepack Minecraft | BarleyTxT.pl`;
+    const packDesc = `Pobierz texturepack ${pack.name} (${pack.version || "1.20+"}) autorstwa ${pack.author} na BarleyTxT.pl! Darmowe pobieranie, statystyki i podgląd 3D.`;
+    const packImg = pack.image?.startsWith("http")
+      ? pack.image
+      : `https://barleytxt.pl${pack.image || "/assets/img/logo.png"}`;
+    const packUrl = `https://barleytxt.pl/texturepacks/${pack.id}`;
+
+    // Dynamic Open Graph & Twitter meta tags for Discord embed
+    html = html
+      .replace(/<title>.*?<\/title>/i, `<title>${packTitle}</title>`)
+      .replace(/<meta property="og:title" content=".*?"\s*\/?>/i, `<meta property="og:title" content="${packTitle}" />`)
+      .replace(/<meta property="og:description" content=".*?"\s*\/?>/i, `<meta property="og:description" content="${packDesc}" />`)
+      .replace(/<meta name="description" content=".*?"\s*\/?>/i, `<meta name="description" content="${packDesc}" />`)
+      .replace(/<meta property="og:image" content=".*?"\s*\/?>/i, `<meta property="og:image" content="${packImg}" />`)
+      .replace(
+        /<\/head>/i,
+        `    <meta property="og:url" content="${packUrl}" />\n` +
+        `    <meta name="twitter:card" content="summary_large_image" />\n` +
+        `    <meta name="twitter:title" content="${packTitle}" />\n` +
+        `    <meta name="twitter:description" content="${packDesc}" />\n` +
+        `    <meta name="twitter:image" content="${packImg}" />\n</head>`
+      );
+  }
+
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  return res.send(html);
+}
+
+// Obsługa starych i nowych linków do texturepacków z Discorda (np. /texturepacks/egz0tyczny_txtt)
+app.get([
+  "/texturepacks/:packId",
+  "/texturepack/:packId",
+  "/en/texturepacks/:packId",
+  "/de/texturepacks/:packId",
+  "/en/texturepack/:packId",
+  "/de/texturepack/:packId"
+], (req, res, next) => {
+  const packId = req.params.packId;
+  const isCategory = ["all", "pvp", "boxpvp", "overlay", "wszystkie", "nakladki"].includes((packId || "").toLowerCase());
+  if (isCategory) {
+    const html = getIndexHtml();
+    if (html) {
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.send(html);
+    }
+    return res.sendFile(path.join(WEBSITE_ROOT, "index.html"));
+  }
+  return servePackHtml(req, res, packId);
 });
 
 app.use(express.static(WEBSITE_ROOT));
@@ -1136,6 +1387,15 @@ app.get("/:slug", async (req, res, next) => {
 });
 
 app.get("/", (req, res) => {
+  const packId = req.query.pack || req.query.id;
+  if (packId) {
+    return servePackHtml(req, res, packId);
+  }
+  const html = getIndexHtml();
+  if (html) {
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.send(html);
+  }
   res.send("API Działa poprawnie");
 });
 
@@ -1153,4 +1413,6 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 3000;
 
-server.listen(PORT);
+server.listen(PORT, () => {
+  console.log(`Serwer działa na porcie ${PORT}`);
+});

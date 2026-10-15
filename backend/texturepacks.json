@@ -1,5 +1,175 @@
 [
   {
+    "id": "adi_szambo_pack",
+    "name": "adi szambo pack",
+    "author": "r5gs",
+    "image": "/assets/img/texturepacks/adi szambo pack/background.webp",
+    "icon": "/assets/img/texturepacks/adi szambo pack/icon.webp",
+    "version": "1.16.2+",
+    "category": "pvp",
+    "download": "https://www.mediafire.com/file/oq9smv1qdwfgsla/adi+szambo+pack.rar/file"
+  },
+  {
+    "id": "wonciak3",
+    "name": "Wonciak 3",
+    "author": "Wonciak",
+    "image": "/assets/img/texturepacks/Wonciak 3/background.webp",
+    "icon": "/assets/img/texturepacks/Wonciak 3/icon.webp",
+    "version": "1.20.2+",
+    "category": "pvp",
+    "download": "https://www.mediafire.com/file/va02q6bwi23h7pi/wonciak+3.zip/file"
+  },
+  {
+    "id": "wonciak_xd",
+    "name": "Wonciak xd",
+    "author": "Wonciak",
+    "image": "/assets/img/texturepacks/Wonciak xd/background.webp",
+    "icon": "/assets/img/texturepacks/Wonciak xd/icon.webp",
+    "version": "1.21.7+",
+    "category": "pvp",
+    "download": "https://www.mediafire.com/file/hvrxnas488t6cws/§6!++++++++++§bWonciak+xd.zip/file"
+  },
+  {
+    "id": "wonciak_fajny_txt_d",
+    "name": "Wonciak fajny txt d",
+    "author": "Wonciak",
+    "image": "/assets/img/texturepacks/Wonciak fajny txt d/background.webp",
+    "icon": "/assets/img/texturepacks/Wonciak fajny txt d/icon.webp",
+    "version": "1.20+",
+    "category": "pvp",
+    "download": "https://www.mediafire.com/file/bva9n3n5ifky62j/§0§lWonciak+fajny+txt+d.zip/file"
+  },
+  {
+    "id": "wonciak2",
+    "name": "Wonciak 2",
+    "author": "Wonciak",
+    "image": "/assets/img/texturepacks/Wonciak 2/background.webp",
+    "icon": "/assets/img/texturepacks/Wonciak 2/icon.webp",
+    "version": "1.20.2+",
+    "category": "pvp",
+    "download": "https://www.mediafire.com/file/4k0flrq031ie9lb/wonciak+2.zip/file"
+  },
+  {
+    "id": "wonciak1",
+    "name": "Wonciak 1",
+    "author": "Wonciak",
+    "image": "/assets/img/texturepacks/Wonciak 1/background.webp",
+    "icon": "/assets/img/texturepacks/Wonciak 1/icon.webp",
+    "version": "1.21+",
+    "category": "pvp",
+    "download": "https://www.mediafire.com/file/ojzr1jbo9qym5fw/wonciak+1.zip/file"
+  },
+  {
+    "id": "wonciak_jedynka",
+    "name": "Wonciak Jedynka",
+    "author": "Wonciak",
+    "image": "/assets/img/texturepacks/Wonciak Jedynka/background.webp",
+    "icon": "/assets/img/texturepacks/Wonciak Jedynka/icon.webp",
+    "version": "1.21+",
+    "category": "pvp",
+    "download": "https://www.mediafire.com/file/ykyr2njkw9du6op/!§4Wonciak+Jedynka.zip/file"
+  },
+  {
+    "id": "wonciak_edit2",
+    "name": "Wonciak edit 2",
+    "author": "Wonciak",
+    "image": "/assets/img/texturepacks/Wonciak edit 2/background.webp",
+    "icon": "/assets/img/texturepacks/Wonciak edit 2/icon.webp",
+    "version": "1.20.2+",
+    "category": "pvp",
+    "download": "https://www.mediafire.com/file/biaw7cg8mnc6mx1/Wonciak+edit+2.zip/file"
+  },
+  {
+    "id": "wkdzik_pack",
+    "name": "WKDZIK Pack",
+    "author": "Dxktyl",
+    "image": "/assets/img/texturepacks/WKDZIK Pack/background.webp",
+    "icon": "/assets/img/texturepacks/WKDZIK Pack/icon.webp",
+    "version": "1.21.6+",
+    "category": "pvp",
+    "download": "https://www.mediafire.com/file/v2nby2btz7frd20/0d453f48630ae32f1bbfe3acab0d00bb_1786389786848-WKDZIK_PACK.zip/file"
+  },
+  {
+    "id": "jajo_czy_parufka",
+    "name": "Jajo czy parufka",
+    "author": "1l2l_",
+    "image": "/assets/img/texturepacks/Jajo czy parufka/background.webp",
+    "icon": "/assets/img/texturepacks/Jajo czy parufka/icon.webp",
+    "version": "1.21.11+",
+    "category": "pvp",
+    "download": "https://www.mediafire.com/file/eko17q5z0z5e87c/!+Jajo+czy+parufka_1.21.11.zip/file"
+  },
+  {
+    "id": "haimiya_anime_pvp",
+    "name": "Haimiya Anime PvP",
+    "author": "Shymaa",
+    "image": "/assets/img/texturepacks/Haimiya Anime PvP/background.webp",
+    "icon": "/assets/img/texturepacks/Haimiya Anime PvP/icon.webp",
+    "version": "1.21.11+",
+    "category": "pvp",
+    "download": "https://www.mediafire.com/file/go0eq610od0s0k4/Haimiya_Anime_PvP_%5B1.21.11%5D.zip/file"
+  },
+  {
+    "id": "parufkowa_sklejka",
+    "name": "Parufkowa Sklejka",
+    "author": "4tw3",
+    "image": "/assets/img/texturepacks/Parufkowa Sklejka/background.webp",
+    "icon": "/assets/img/texturepacks/Parufkowa Sklejka/icon.webp",
+    "version": "1.16.2+",
+    "category": "pvp",
+    "download": "https://www.mediafire.com/file/l6pms4bmii8z8rh/parufkowa+sklejka.zip/file"
+  },
+  {
+    "id": "cha_hae_in_casual_latest_qvaiss",
+    "name": "Cha Hae-In casual latest - qvaiss",
+    "author": "qvaiss",
+    "image": "/assets/img/texturepacks/Cha Hae-In casual latest - qvaiss/background.webp",
+    "icon": "/assets/img/texturepacks/Cha Hae-In casual latest - qvaiss/icon.webp",
+    "version": "1.21+",
+    "category": "pvp",
+    "download": "https://www.mediafire.com/file/fzdm4fh0rpfho5s/%21_%C2%A7e%C2%A7lCha_%C2%A7f%C2%A7lHae-In_casual_%C2%A7flatest_%C2%A7l%C2%A78-_qvaiss.zip/file"
+  },
+  {
+    "id": "zero_two_latest_qvaiss",
+    "name": "Zero Two latest - qvaiss",
+    "author": "qvaiss",
+    "image": "/assets/img/texturepacks/Zero Two latest - qvaiss/background.webp",
+    "icon": "/assets/img/texturepacks/Zero Two latest - qvaiss/icon.webp",
+    "version": "1.21+",
+    "category": "pvp",
+    "download": "https://www.mediafire.com/file/5sa7be3zbs2xbm9/%21_%C2%A7dZero_%C2%A7fTwo_%C2%A7flatest_%C2%A7l%C2%A78-_qvaiss.zip/file"
+  },
+  {
+    "id": "rem_rezero_latest_qvaiss",
+    "name": "Rem ReZero latest - qvaiss",
+    "author": "qvaiss",
+    "image": "/assets/img/texturepacks/Rem ReZero latest - qvaiss/background.webp",
+    "icon": "/assets/img/texturepacks/Rem ReZero latest - qvaiss/icon.webp",
+    "version": "1.21+",
+    "category": "pvp",
+    "download": "https://www.mediafire.com/file/ewk9ixyuddug8je/%21_%C2%A7bRem_%C2%A75Re%C2%A7fZero_%C2%A7flatest_%C2%A7l%C2%A78-_qvaiss.zip/file"
+  },
+  {
+    "id": "mahiru_shiina_latest_qvaiss",
+    "name": "Mahiru Shiina latest - qvaiss",
+    "author": "qvaiss",
+    "image": "/assets/img/texturepacks/Mahiru Shiina latest - qvaiss/background.webp",
+    "icon": "/assets/img/texturepacks/Mahiru Shiina latest - qvaiss/icon.webp",
+    "version": "1.21+",
+    "category": "pvp",
+    "download": "https://www.mediafire.com/file/qcb8z659vx46o43/%21_%C2%A76%C2%A7lMahiru_%C2%A7e%C2%A7lShiina_%C2%A7flatest_%C2%A7l%C2%A78-_qvaiss.zip/file"
+  },
+  {
+    "id": "marin_kitagawa_by_demon",
+    "name": "Marin Kitagawa by Demon",
+    "author": "demon",
+    "image": "/assets/img/texturepacks/Marin Kitagawa by Demon/background.webp",
+    "icon": "/assets/img/texturepacks/Marin Kitagawa by Demon/icon.webp",
+    "version": "1.21+",
+    "category": "pvp",
+    "download": "https://www.mediafire.com/file/mrqneh8rnd6moyu/%C2%A7e%C2%A7lMarin_Kitagawa_1.21%2B_%C2%A7r%C2%A78%C2%A7fby_%C2%A75%C2%A7lDemon.zip/file"
+  },
+  {
     "id": "egz0tyczny_txtt",
     "name": "egz0tyczny txtt",
     "author": "s3kcja",

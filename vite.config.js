@@ -12,6 +12,12 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true
+      }
+    },
     allowedHosts: [
       'barleytxt.pl',
       '.barleytxt.pl'
@@ -19,6 +25,12 @@ export default defineConfig({
   },
   preview: {
     port: 5173,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true
+      }
+    },
     allowedHosts: [
       'barleytxt.pl',
       '.barleytxt.pl'

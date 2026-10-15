@@ -2,13 +2,15 @@ import React, { useEffect, useState, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { useToast } from '../context/ToastContext';
 import { useLanguage } from '../context/LanguageContext';
+import { usePacks } from '../context/PacksContext';
 import { API_BASE } from '../config';
 
 export const PackDetailModal = ({ pack, onClose, onOpenConverter }) => {
   const { addToast } = useToast();
   const { t } = useLanguage();
+  const { updatePackDownloads } = usePacks();
   const [views, setViews] = useState(0);
-  const [downloads, setDownloads] = useState(0);
+  const [downloads, setDownloads] = useState(pack?.downloads || 0);
 
   // Whitelist bypass check
   const [isWhitelisted, setIsWhitelisted] = useState(false);
@@ -111,6 +113,7 @@ export const PackDetailModal = ({ pack, onClose, onOpenConverter }) => {
         if (data) {
           setViews(data.views || 0);
           setDownloads(data.downloads || 0);
+          updatePackDownloads?.(pack.id, data.downloads || 0);
         }
       })
       .catch(() => {
@@ -120,6 +123,7 @@ export const PackDetailModal = ({ pack, onClose, onOpenConverter }) => {
             if (data) {
               setViews(data.views || 0);
               setDownloads(data.downloads || 0);
+              updatePackDownloads?.(pack.id, data.downloads || 0);
             }
           })
           .catch(() => {});
@@ -180,7 +184,11 @@ export const PackDetailModal = ({ pack, onClose, onOpenConverter }) => {
       fetch(`/download/${pack.id}`, { method: 'POST', keepalive: true }).catch(() => {});
     });
 
-    setDownloads((prev) => prev + 1);
+    setDownloads((prev) => {
+      const next = prev + 1;
+      updatePackDownloads?.(pack.id, next);
+      return next;
+    });
 
     if (pack.download) {
       addToast(`Pobieranie paczki "${pack.name}" rozpoczęte!`, 'success');
@@ -193,7 +201,7 @@ export const PackDetailModal = ({ pack, onClose, onOpenConverter }) => {
   };
 
   const handleShare = async () => {
-    const url = `${window.location.origin}/?pack=${pack.id}`;
+    const url = `${window.location.origin}/texturepacks/${pack.id}`;
     if (navigator.share) {
       try {
         await navigator.share({
@@ -244,7 +252,13 @@ export const PackDetailModal = ({ pack, onClose, onOpenConverter }) => {
               src={pack.icon || '/assets/img/favicon.png'}
               alt={pack.name}
               className="download-pack-icon"
-              onError={(e) => { e.target.src = '/assets/img/favicon.png'; }}
+              onError={(e) => {
+                if (e.target.src && !e.target.src.includes('barleytxt.pl') && (pack.icon || '').startsWith('/assets/img/texturepacks/')) {
+                  e.target.src = `https://barleytxt.pl${pack.icon}`;
+                  return;
+                }
+                e.target.src = '/assets/img/favicon.png';
+              }}
             />
             <div className="download-pack-info">
               <div className="download-pack-title">{pack.name}</div>

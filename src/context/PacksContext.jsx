@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo } from '
 import { useToast } from './ToastContext';
 import { useAuth } from './AuthContext';
 import { API_BASE, SOCKET_URL } from '../config';
+import initialPackDownloads from '../data/pack_downloads.json';
 
 const PacksContext = createContext();
 
@@ -28,6 +29,12 @@ export const PacksProvider = ({ children }) => {
     if (num >= 999500) return (num / 1e6).toFixed(1).replace('.0', '') + 'M';
     if (num >= 1e3) return (num / 1e3).toFixed(1).replace('.0', '') + 'K';
     return num.toString();
+  };
+
+  const updatePackDownloads = (packId, count) => {
+    setPacks((prev) =>
+      prev.map((p) => (p.id === packId ? { ...p, downloads: count } : p))
+    );
   };
 
   useEffect(() => {
@@ -69,13 +76,24 @@ export const PacksProvider = ({ children }) => {
             try {
               const custom = JSON.parse(localStored);
               if (Array.isArray(custom)) {
+                // Keep only valid custom packs (must have name and download)
+                const validCustom = custom.filter(p => p && p.name && p.download);
+                if (validCustom.length !== custom.length) {
+                  localStorage.setItem('barley_custom_packs', JSON.stringify(validCustom));
+                }
                 const existingIds = new Set(packsData.map(p => p.id));
-                const additions = custom.filter(p => !existingIds.has(p.id));
+                const additions = validCustom.filter(p => !existingIds.has(p.id));
                 packsData = [...additions, ...packsData];
               }
             } catch (_) {}
           }
-          setPacks(packsData);
+          // Filter out any ghost/empty items
+          packsData = packsData.filter(p => p && p.name && p.download);
+          const enriched = packsData.map(p => ({
+            ...p,
+            downloads: typeof p.downloads === 'number' ? p.downloads : (initialPackDownloads[p.id] || 0)
+          }));
+          setPacks(enriched);
         }
       } catch (err) {
         console.error('Error loading texturepacks:', err);
@@ -230,8 +248,8 @@ export const PacksProvider = ({ children }) => {
         // Newer packs are at the beginning of the array or by index
         return 0;
       }
-      // 'popular' default - default JSON order or downloads
-      return 0;
+      // 'popular' default - sort by downloads descending
+      return (b.downloads || 0) - (a.downloads || 0);
     });
   }, [packs, selectedCategory, selectedVersion, searchQuery, sortBy]);
 
@@ -252,6 +270,19 @@ export const PacksProvider = ({ children }) => {
           if (res.ok) {
             const data = await res.json();
             createdPack = data.pack;
+          } else if (API_BASE && API_BASE !== window.location.origin) {
+            const res2 = await fetch(`${API_BASE}/api/admin/packs`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-admin-key': adminToken
+              },
+              body: JSON.stringify(packData)
+            });
+            if (res2.ok) {
+              const data2 = await res2.json();
+              createdPack = data2.pack;
+            }
           }
         } catch (_) {}
       }
@@ -273,6 +304,7 @@ export const PacksProvider = ({ children }) => {
       const localStored = localStorage.getItem('barley_custom_packs');
       let custom = [];
       try { custom = localStored ? JSON.parse(localStored) : []; } catch (_) {}
+      custom = custom.filter(p => p.id !== createdPack.id);
       custom.unshift(createdPack);
       localStorage.setItem('barley_custom_packs', JSON.stringify(custom));
 
@@ -289,7 +321,7 @@ export const PacksProvider = ({ children }) => {
     try {
       if (adminToken) {
         try {
-          await fetch(`/api/admin/packs/${id}`, {
+          const res = await fetch(`/api/admin/packs/${encodeURIComponent(id)}`, {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',
@@ -297,8 +329,30 @@ export const PacksProvider = ({ children }) => {
             },
             body: JSON.stringify(updatedFields)
           });
+          if (!res.ok && API_BASE && API_BASE !== window.location.origin) {
+            await fetch(`${API_BASE}/api/admin/packs/${encodeURIComponent(id)}`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-admin-key': adminToken
+              },
+              body: JSON.stringify(updatedFields)
+            });
+          }
         } catch (_) {}
       }
+
+      // Update in localStorage if present
+      try {
+        const localStored = localStorage.getItem('barley_custom_packs');
+        if (localStored) {
+          let custom = JSON.parse(localStored);
+          if (Array.isArray(custom)) {
+            custom = custom.map(p => (p.id === id ? { ...p, ...updatedFields } : p));
+            localStorage.setItem('barley_custom_packs', JSON.stringify(custom));
+          }
+        }
+      } catch (_) {}
 
       setPacks((prev) => prev.map((p) => p.id === id ? { ...p, ...updatedFields } : p));
       addToast('Paczka została zaktualizowana!', 'success');
@@ -312,17 +366,54 @@ export const PacksProvider = ({ children }) => {
   // Admin: Delete Pack
   const deletePack = async (id) => {
     try {
+      let serverDeleted = false;
+
       if (adminToken) {
+        // 1. Try local Vite proxy or direct API
         try {
-          await fetch(`/api/admin/packs/${id}`, {
+          const res = await fetch(`/api/admin/packs/${encodeURIComponent(id)}`, {
             method: 'DELETE',
             headers: { 'x-admin-key': adminToken }
           });
+          if (res.ok) serverDeleted = true;
         } catch (_) {}
+
+        // 2. Fallback to API_BASE if separate backend host
+        if (!serverDeleted && API_BASE && API_BASE !== window.location.origin) {
+          try {
+            const res = await fetch(`${API_BASE}/api/admin/packs/${encodeURIComponent(id)}`, {
+              method: 'DELETE',
+              headers: { 'x-admin-key': adminToken }
+            });
+            if (res.ok) serverDeleted = true;
+          } catch (_) {}
+        }
       }
 
-      setPacks((prev) => prev.filter((p) => p.id !== id));
-      addToast('Paczka została usunięta!', 'info');
+      // 3. Always remove from localStorage
+      try {
+        const localStored = localStorage.getItem('barley_custom_packs');
+        if (localStored) {
+          const custom = JSON.parse(localStored);
+          if (Array.isArray(custom)) {
+            const cleanId = id.toString().toLowerCase().replace(/[-_ ]/g, '');
+            const filtered = custom.filter(p => {
+              const pid = (p.id || '').toString().toLowerCase();
+              return pid !== id.toString().toLowerCase() && pid.replace(/[-_ ]/g, '') !== cleanId;
+            });
+            localStorage.setItem('barley_custom_packs', JSON.stringify(filtered));
+          }
+        }
+      } catch (_) {}
+
+      // 4. Remove from React state (by exact and normalized ID)
+      const cleanTargetId = id.toString().toLowerCase().replace(/[-_ ]/g, '');
+      setPacks((prev) => prev.filter((p) => {
+        const pid = (p.id || '').toString().toLowerCase();
+        return pid !== id.toString().toLowerCase() && pid.replace(/[-_ ]/g, '') !== cleanTargetId;
+      }));
+
+      addToast('Paczka została trwale usunięta!', 'info');
       return { success: true };
     } catch (err) {
       addToast('Błąd usuwania paczki: ' + err.message, 'error');
@@ -378,7 +469,8 @@ export const PacksProvider = ({ children }) => {
       updatePack,
       deletePack,
       exportPacks,
-      importPacks
+      importPacks,
+      updatePackDownloads
     }}>
       {children}
     </PacksContext.Provider>

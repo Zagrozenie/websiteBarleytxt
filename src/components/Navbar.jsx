@@ -26,6 +26,40 @@ export const Navbar = ({ currentView, setCurrentView }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Lock body scroll when mobile menu is open to prevent CLS and background scrolling
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.classList.add('mobile-menu-open');
+    } else {
+      document.body.classList.remove('mobile-menu-open');
+    }
+    return () => {
+      document.body.classList.remove('mobile-menu-open');
+    };
+  }, [mobileMenuOpen]);
+
+  // Handle ESC key and resize above mobile breakpoint
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth > 992) {
+        setMobileMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setMobileMenuOpen(false);
+        setDropdownOpen(false);
+        setLangMenuOpen(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
   const handleCategorySelect = (category) => {
     setSelectedCategory(category);
     setCurrentView('catalog');
@@ -78,11 +112,18 @@ export const Navbar = ({ currentView, setCurrentView }) => {
         <nav className="navbar-container">
           <div className="navbar-logo">
             <a href="/" onClick={(e) => handleNavClick('home', e)}>
-              <img src="/assets/img/favicon.png" alt="Logo witryny" />
+              <img src="/assets/img/favicon.png" alt="Logo witryny" width="40" height="40" />
             </a>
           </div>
 
-          <div className={`navbar-menu ${mobileMenuOpen ? 'active' : ''}`}>
+          <div
+            className={`navbar-menu ${mobileMenuOpen ? 'active' : ''}`}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setMobileMenuOpen(false);
+              }
+            }}
+          >
             <ul>
               <li>
                 <a
@@ -109,37 +150,41 @@ export const Navbar = ({ currentView, setCurrentView }) => {
                   <li>
                     <a
                       href="#"
-                      className="nav-link"
+                      className="nav-link navbar-dropdown-item"
                       onClick={(e) => { e.preventDefault(); handleCategorySelect('all'); }}
                     >
-                      <img src="/assets/img/1133628501166149662.png" alt="Wszystkie" className="navbar-link-icon" /> Wszystkie
+                      <img src="/assets/img/1133628501166149662.png" alt="Wszystkie" className="navbar-link-icon" />
+                      <span className="navbar-link-text">Wszystkie</span>
                     </a>
                   </li>
                   <li>
                     <a
                       href="#"
-                      className="nav-link"
+                      className="nav-link navbar-dropdown-item"
                       onClick={(e) => { e.preventDefault(); handleCategorySelect('boxpvp'); }}
                     >
-                      <img src="/assets/img/1371060064596787221.png" alt="BoxPvP" className="navbar-link-icon" /> BoxPvP
+                      <img src="/assets/img/1371060064596787221.png" alt="BoxPvP" className="navbar-link-icon" />
+                      <span className="navbar-link-text">BoxPvP</span>
                     </a>
                   </li>
                   <li>
                     <a
                       href="#"
-                      className="nav-link"
+                      className="nav-link navbar-dropdown-item"
                       onClick={(e) => { e.preventDefault(); handleCategorySelect('pvp'); }}
                     >
-                      <img src="/assets/img/1168210759063449620.png" alt="PvP" className="navbar-link-icon" /> PvP
+                      <img src="/assets/img/1168210759063449620.png" alt="PvP" className="navbar-link-icon" />
+                      <span className="navbar-link-text">PvP</span>
                     </a>
                   </li>
                   <li>
                     <a
                       href="#"
-                      className="nav-link"
+                      className="nav-link navbar-dropdown-item"
                       onClick={(e) => { e.preventDefault(); handleCategorySelect('overlay'); }}
                     >
-                      <img src="/assets/img/1035911957598973993.png" alt="Overlaye" className="navbar-link-icon" /> Overlaye
+                      <img src="/assets/img/1035911957598973993.png" alt="Overlaye" className="navbar-link-icon" />
+                      <span className="navbar-link-text">Overlaye</span>
                     </a>
                   </li>
                 </ul>
