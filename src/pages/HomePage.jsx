@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { usePacks } from '../context/PacksContext';
 import { PackCard } from '../components/PackCard';
@@ -62,8 +62,12 @@ export const HomePage = ({ setCurrentView }) => {
     return () => clearInterval(interval);
   }, [lang]);
 
-  // Featured popular packs (first 8)
-  const featuredPacks = packs.slice(0, 8);
+  // Featured popular packs: top 9 most downloaded texturepacks
+  const featuredPacks = useMemo(() => {
+    return [...packs]
+      .sort((a, b) => (b.downloads || 0) - (a.downloads || 0))
+      .slice(0, 9);
+  }, [packs]);
 
   return (
     <>
@@ -242,10 +246,11 @@ export const HomePage = ({ setCurrentView }) => {
             <p className="texturepacks-popular-text">Najchętniej pobierane tekstury przez graczy Minecraft</p>
           </div>
           <div id="texturepacks-container" className="texturepacks-card">
-            {featuredPacks.map((pack) => (
+            {featuredPacks.map((pack, index) => (
               <PackCard
                 key={pack.id}
                 pack={pack}
+                rank={index + 1}
                 onClick={() => setActivePack(pack)}
               />
             ))}

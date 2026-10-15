@@ -30,12 +30,18 @@ const allowedOrigins = [
   "https://barleytxt.pl",
   "http://barleytxt.pl",
   "https://www.barleytxt.pl",
-  "http://www.barleytxt.pl"
+  "http://www.barleytxt.pl",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:3000",
+  "http://127.0.0.1:3000"
 ];
 
 const _ALLOWED_HOSTS = [
   "barleytxt.pl",
-  "www.barleytxt.pl"
+  "www.barleytxt.pl",
+  "localhost",
+  "127.0.0.1"
 ];
 function _isHostAllowed(urlStr) {
   if (!urlStr) return false;
@@ -404,13 +410,20 @@ app.post("/download/:packId", async (req, res) => {
 
 app.get("/total-downloads", async (req, res) => {
   try {
-    const stats = await Stat.find({});
+    if (mongoose.connection.readyState === 1) {
+      const stats = await Stat.find({});
+      const totalDownloads = stats.reduce(
+        (sum, s) => sum + (s.downloads || 0),
+        0
+      );
+      return res.json({ totalDownloads });
+    }
 
-    const totalDownloads = stats.reduce(
-      (sum, s) => sum + (s.downloads || 0),
-      0
-    );
-
+    let totalDownloads = 0;
+    try {
+      const localStats = JSON.parse(fs.readFileSync(path.join(__dirname, "pack_downloads.json"), "utf8"));
+      totalDownloads = Object.values(localStats).reduce((a, b) => a + b, 0);
+    } catch (_) {}
     res.json({ totalDownloads });
 
   } catch (error) {
@@ -818,9 +831,65 @@ app.post("/api/admin/login", (req, res) => {
   return res.status(401).json({ error: "Nieprawidłowe hasło administratora" });
 });
 
-app.get("/api/packs", (req, res) => {
-  const packs = getLocalPacks();
-  res.json(packs);
+app.get("/api/packs", async (req, res) => {
+  try {
+    const packs = getLocalPacks();
+    if (mongoose.connection.readyState === 1) {
+      const stats = await Stat.find({}, "packId downloads views").lean();
+      const statsMap = new Map(stats.map((s) => [s.packId, s]));
+      const enriched = packs.map((p) => {
+        const s = statsMap.get(p.id);
+        return {
+          ...p,
+          downloads: s?.downloads || 0,
+          views: s?.views || 0,
+        };
+      });
+      return res.json(enriched);
+    }
+    
+    let localStats = {};
+    try {
+      localStats = JSON.parse(fs.readFileSync(path.join(__dirname, "pack_downloads.json"), "utf8"));
+    } catch (_) {}
+    const enriched = packs.map((p) => ({
+      ...p,
+      downloads: localStats[p.id] || 0,
+      views: 0,
+    }));
+    res.json(enriched);
+  } catch (err) {
+    res.json(getLocalPacks());
+  }
+});
+
+app.get("/api/packs/popular", async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit, 10) || 9;
+    const packs = getLocalPacks();
+    let statsMap = new Map();
+    if (mongoose.connection.readyState === 1) {
+      const stats = await Stat.find({}, "packId downloads views").lean();
+      statsMap = new Map(stats.map((s) => [s.packId, s]));
+    } else {
+      try {
+        const localStats = JSON.parse(fs.readFileSync(path.join(__dirname, "pack_downloads.json"), "utf8"));
+        statsMap = new Map(Object.entries(localStats).map(([id, dl]) => [id, { downloads: dl, views: 0 }]));
+      } catch (_) {}
+    }
+    const enriched = packs.map((p) => {
+      const s = statsMap.get(p.id);
+      return {
+        ...p,
+        downloads: s?.downloads || 0,
+        views: s?.views || 0,
+      };
+    });
+    enriched.sort((a, b) => (b.downloads || 0) - (a.downloads || 0));
+    res.json(enriched.slice(0, limit));
+  } catch (err) {
+    res.status(500).json({ error: "Błąd serwera" });
+  }
 });
 
 // Admin upload Minecraft pack .zip file
@@ -998,16 +1067,29 @@ app.delete("/api/admin/packs/:id", requireAdmin, (req, res) => {
 
 app.get("/stats/:packId", checkOrigin, async (req, res) => {
   try {
-    const stat = await Stat.findOne({
-      packId: req.params.packId
-    });
+    if (mongoose.connection.readyState === 1) {
+      const stat = await Stat.findOne({
+        packId: req.params.packId
+      });
 
-    res.json(
-      stat || {
-        views: 0,
-        downloads: 0
-      }
-    );
+      return res.json(
+        stat || {
+          views: 0,
+          downloads: 0
+        }
+      );
+    }
+
+    let dl = 0;
+    try {
+      const localStats = JSON.parse(fs.readFileSync(path.join(__dirname, "pack_downloads.json"), "utf8"));
+      dl = localStats[req.params.packId] || 0;
+    } catch (_) {}
+
+    res.json({
+      views: 0,
+      downloads: dl
+    });
 
   } catch (err) {
     res.status(500).send("Błąd serwera");
@@ -1153,4 +1235,6 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 3000;
 
-server.listen(PORT);
+server.listen(PORT, () => {
+  console.log(`Serwer działa na porcie ${PORT}`);
+});

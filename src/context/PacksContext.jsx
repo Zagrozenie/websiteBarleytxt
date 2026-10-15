@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo } from '
 import { useToast } from './ToastContext';
 import { useAuth } from './AuthContext';
 import { API_BASE, SOCKET_URL } from '../config';
+import initialPackDownloads from '../data/pack_downloads.json';
 
 const PacksContext = createContext();
 
@@ -28,6 +29,12 @@ export const PacksProvider = ({ children }) => {
     if (num >= 999500) return (num / 1e6).toFixed(1).replace('.0', '') + 'M';
     if (num >= 1e3) return (num / 1e3).toFixed(1).replace('.0', '') + 'K';
     return num.toString();
+  };
+
+  const updatePackDownloads = (packId, count) => {
+    setPacks((prev) =>
+      prev.map((p) => (p.id === packId ? { ...p, downloads: count } : p))
+    );
   };
 
   useEffect(() => {
@@ -75,7 +82,11 @@ export const PacksProvider = ({ children }) => {
               }
             } catch (_) {}
           }
-          setPacks(packsData);
+          const enriched = packsData.map(p => ({
+            ...p,
+            downloads: typeof p.downloads === 'number' ? p.downloads : (initialPackDownloads[p.id] || 0)
+          }));
+          setPacks(enriched);
         }
       } catch (err) {
         console.error('Error loading texturepacks:', err);
@@ -230,8 +241,8 @@ export const PacksProvider = ({ children }) => {
         // Newer packs are at the beginning of the array or by index
         return 0;
       }
-      // 'popular' default - default JSON order or downloads
-      return 0;
+      // 'popular' default - sort by downloads descending
+      return (b.downloads || 0) - (a.downloads || 0);
     });
   }, [packs, selectedCategory, selectedVersion, searchQuery, sortBy]);
 
@@ -378,7 +389,8 @@ export const PacksProvider = ({ children }) => {
       updatePack,
       deletePack,
       exportPacks,
-      importPacks
+      importPacks,
+      updatePackDownloads
     }}>
       {children}
     </PacksContext.Provider>
