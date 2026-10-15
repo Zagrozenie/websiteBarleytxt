@@ -750,6 +750,7 @@ const reservedSlugs = [
   "terms-of-service", "terms-of-service.html",
   "unlock", "unlock.html",
   "texturepacks",
+  "texturepack",
   "texturepacks.json",
   "robots.txt",
   "sitemap.xml",
@@ -1101,31 +1102,90 @@ app.get("/api/check-whitelist", checkOrigin, async (req, res) => {
   res.json({ whitelisted });
 });
 
-app.get("/en/texturepacks/:packId", async (req, res, next) => {
-  try {
-    const packId = req.params.packId;
-    return res.sendFile(path.join(__dirname, "..", "en", "texturepacks", "pack.html"));
-  } catch (err) {
-    return next();
+function getIndexHtml() {
+  const distIndex = path.join(WEBSITE_ROOT, "dist", "index.html");
+  const rootIndex = path.join(WEBSITE_ROOT, "index.html");
+  if (fs.existsSync(distIndex)) {
+    return fs.readFileSync(distIndex, "utf8");
   }
-});
+  if (fs.existsSync(rootIndex)) {
+    return fs.readFileSync(rootIndex, "utf8");
+  }
+  return null;
+}
 
-app.get("/de/texturepacks/:packId", async (req, res, next) => {
-  try {
-    const packId = req.params.packId;
-    return res.sendFile(path.join(__dirname, "..", "de", "texturepacks", "pack.html"));
-  } catch (err) {
-    return next();
-  }
-});
+function servePackHtml(req, res, packId) {
+  const packs = getLocalPacks();
+  const slug = (packId || "").trim();
+  const decoded = decodeURIComponent(slug).toLowerCase();
+  const clean = decoded.replace(/[-_ ]/g, "");
 
-app.get("/texturepacks/:packId", async (req, res, next) => {
-  try {
-    const packId = req.params.packId;
-    return res.sendFile(path.join(__dirname, "..", "texturepacks", "pack.html"));
-  } catch (err) {
-    return next();
+  const pack = packs.find(
+    (p) =>
+      p.id === slug ||
+      p.id?.toLowerCase() === decoded ||
+      p.id?.toLowerCase().replace(/[-_ ]/g, "") === clean ||
+      p.name?.toLowerCase() === decoded ||
+      p.name?.toLowerCase().replace(/[-_ ]/g, "") === clean
+  );
+
+  let html = getIndexHtml();
+  if (!html) {
+    const fallbackPath = fs.existsSync(path.join(WEBSITE_ROOT, "dist", "index.html"))
+      ? path.join(WEBSITE_ROOT, "dist", "index.html")
+      : path.join(WEBSITE_ROOT, "index.html");
+    return res.sendFile(fallbackPath);
   }
+
+  if (pack) {
+    const packTitle = `${pack.name} — Texturepack Minecraft | BarleyTxT.pl`;
+    const packDesc = `Pobierz texturepack ${pack.name} (${pack.version || "1.20+"}) autorstwa ${pack.author} na BarleyTxT.pl! Darmowe pobieranie, statystyki i podgląd 3D.`;
+    const packImg = pack.image?.startsWith("http")
+      ? pack.image
+      : `https://barleytxt.pl${pack.image || "/assets/img/logo.png"}`;
+    const packUrl = `https://barleytxt.pl/texturepacks/${pack.id}`;
+
+    // Dynamic Open Graph & Twitter meta tags for Discord embed
+    html = html
+      .replace(/<title>.*?<\/title>/i, `<title>${packTitle}</title>`)
+      .replace(/<meta property="og:title" content=".*?"\s*\/?>/i, `<meta property="og:title" content="${packTitle}" />`)
+      .replace(/<meta property="og:description" content=".*?"\s*\/?>/i, `<meta property="og:description" content="${packDesc}" />`)
+      .replace(/<meta name="description" content=".*?"\s*\/?>/i, `<meta name="description" content="${packDesc}" />`)
+      .replace(/<meta property="og:image" content=".*?"\s*\/?>/i, `<meta property="og:image" content="${packImg}" />`)
+      .replace(
+        /<\/head>/i,
+        `    <meta property="og:url" content="${packUrl}" />\n` +
+        `    <meta name="twitter:card" content="summary_large_image" />\n` +
+        `    <meta name="twitter:title" content="${packTitle}" />\n` +
+        `    <meta name="twitter:description" content="${packDesc}" />\n` +
+        `    <meta name="twitter:image" content="${packImg}" />\n</head>`
+      );
+  }
+
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  return res.send(html);
+}
+
+// Obsługa starych i nowych linków do texturepacków z Discorda (np. /texturepacks/egz0tyczny_txtt)
+app.get([
+  "/texturepacks/:packId",
+  "/texturepack/:packId",
+  "/en/texturepacks/:packId",
+  "/de/texturepacks/:packId",
+  "/en/texturepack/:packId",
+  "/de/texturepack/:packId"
+], (req, res, next) => {
+  const packId = req.params.packId;
+  const isCategory = ["all", "pvp", "boxpvp", "overlay", "wszystkie", "nakladki"].includes((packId || "").toLowerCase());
+  if (isCategory) {
+    const html = getIndexHtml();
+    if (html) {
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.send(html);
+    }
+    return res.sendFile(path.join(WEBSITE_ROOT, "index.html"));
+  }
+  return servePackHtml(req, res, packId);
 });
 
 app.use(express.static(WEBSITE_ROOT));
@@ -1218,6 +1278,15 @@ app.get("/:slug", async (req, res, next) => {
 });
 
 app.get("/", (req, res) => {
+  const packId = req.query.pack || req.query.id;
+  if (packId) {
+    return servePackHtml(req, res, packId);
+  }
+  const html = getIndexHtml();
+  if (html) {
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.send(html);
+  }
   res.send("API Działa poprawnie");
 });
 

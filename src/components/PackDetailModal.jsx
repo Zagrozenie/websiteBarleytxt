@@ -201,7 +201,7 @@ export const PackDetailModal = ({ pack, onClose, onOpenConverter }) => {
   };
 
   const handleShare = async () => {
-    const url = `${window.location.origin}/?pack=${pack.id}`;
+    const url = `${window.location.origin}/texturepacks/${pack.id}`;
     if (navigator.share) {
       try {
         await navigator.share({
