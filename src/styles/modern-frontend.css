@@ -517,6 +517,21 @@ body {
   color: #60a5fa !important;
 }
 
+.section-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.95rem;
+  background: rgba(37, 99, 235, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: var(--modern-radius-full);
+  color: #60a5fa;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  box-shadow: 0 0 16px rgba(59, 130, 246, 0.15);
+  backdrop-filter: blur(8px);
+}
+
 .container h1 {
   font-family: var(--modern-font-heading) !important;
   font-size: 3.75rem !important;
@@ -815,7 +830,7 @@ body {
 }
 
 .button-search:hover {
-  transform: translateY(-50%) scale(1.03) !important;
+  transform: translateY(-2px) !important;
   box-shadow: 0 6px 20px rgba(59, 130, 246, 0.5) !important;
 }
 
@@ -864,20 +879,99 @@ body {
   transform: rotate(90deg) !important;
 }
 
+/* Download Button - Locked / Inactive State */
 .download-pack-button {
-  background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%) !important;
-  border-radius: var(--modern-radius-full) !important;
-  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4) !important;
-  font-weight: 600 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.5rem !important;
+  width: 100% !important;
   padding: 0.95rem 1.75rem !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
-  transition: var(--modern-transition) !important;
+  border-radius: 0.75rem !important;
+  font-weight: 600 !important;
+  font-size: 0.9375rem !important;
+  font-family: var(--modern-font-body, 'Inter', sans-serif) !important;
+  letter-spacing: 0.02em !important;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.75) 0%, rgba(15, 23, 42, 0.9) 100%) !important;
+  color: #94a3b8 !important;
+  border: 1.5px solid rgba(148, 163, 184, 0.3) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 4px 14px rgba(0, 0, 0, 0.25) !important;
+  cursor: not-allowed !important;
+  opacity: 1 !important;
+  user-select: none !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  position: relative !important;
+  overflow: hidden !important;
 }
 
-.download-pack-button:hover {
+.download-pack-button-icon {
+  width: 1.25rem !important;
+  height: 1.25rem !important;
+  color: #94a3b8 !important;
+  transition: transform 0.3s ease, color 0.3s ease !important;
+  flex-shrink: 0 !important;
+}
+
+/* Hover on Locked Button - Subtle feedback informing user it's locked */
+.download-pack-button:not(.unlocked):hover,
+.download-pack-button:disabled:hover {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.85) 0%, rgba(15, 23, 42, 0.95) 100%) !important;
+  border-color: rgba(239, 68, 68, 0.45) !important;
+  color: #cbd5e1 !important;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35), 0 0 14px rgba(239, 68, 68, 0.15) !important;
+  transform: none !important;
+  cursor: not-allowed !important;
+}
+
+.download-pack-button:not(.unlocked):hover .download-pack-button-icon,
+.download-pack-button:disabled:hover .download-pack-button-icon {
+  color: #f87171 !important;
+  transform: scale(0.95) !important;
+}
+
+/* Unlocked State - High energy, vibrant and ready to download */
+.download-pack-button.unlocked,
+.download-pack-button.unlocked:not(:disabled) {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  color: #ffffff !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.3) !important;
+  box-shadow: 0 8px 25px rgba(16, 185, 129, 0.45), 0 0 20px rgba(16, 185, 129, 0.25) !important;
+  cursor: pointer !important;
+  animation: downloadPulse 2.4s infinite ease-in-out !important;
+}
+
+.download-pack-button.unlocked .download-pack-button-icon {
+  color: #ffffff !important;
+  animation: downloadBounce 1.6s infinite ease-in-out !important;
+}
+
+.download-pack-button.unlocked:hover {
   transform: translateY(-2px) !important;
-  box-shadow: 0 10px 30px rgba(59, 130, 246, 0.6) !important;
-  background: linear-gradient(135deg, #2563eb 0%, #60a5fa 100%) !important;
+  background: linear-gradient(135deg, #34d399 0%, #059669 100%) !important;
+  box-shadow: 0 12px 32px rgba(16, 185, 129, 0.65), 0 0 25px rgba(16, 185, 129, 0.4) !important;
+  border-color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.download-pack-button.unlocked:active {
+  transform: translateY(0) scale(0.98) !important;
+}
+
+@keyframes downloadPulse {
+  0%, 100% {
+    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.45), 0 0 16px rgba(16, 185, 129, 0.25);
+  }
+  50% {
+    box-shadow: 0 10px 30px rgba(16, 185, 129, 0.65), 0 0 26px rgba(16, 185, 129, 0.45);
+  }
+}
+
+@keyframes downloadBounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
 }
 
 /* ==========================================================================
