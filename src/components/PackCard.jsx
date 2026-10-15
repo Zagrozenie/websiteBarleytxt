@@ -7,10 +7,18 @@ export const PackCard = ({ pack, onClick, rank }) => {
   const { formatStatNumber } = usePacks();
 
   const handleImageError = (e) => {
+    if (e.target.src && !e.target.src.includes('barleytxt.pl') && (pack.image || '').startsWith('/assets/img/texturepacks/')) {
+      e.target.src = `https://barleytxt.pl${pack.image}`;
+      return;
+    }
     e.target.src = '/assets/img/texturepack.png';
   };
 
   const handleIconError = (e) => {
+    if (e.target.src && !e.target.src.includes('barleytxt.pl') && (pack.icon || '').startsWith('/assets/img/texturepacks/')) {
+      e.target.src = `https://barleytxt.pl${pack.icon}`;
+      return;
+    }
     e.target.src = '/assets/img/favicon.png';
   };
 

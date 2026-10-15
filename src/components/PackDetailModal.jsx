@@ -252,7 +252,13 @@ export const PackDetailModal = ({ pack, onClose, onOpenConverter }) => {
               src={pack.icon || '/assets/img/favicon.png'}
               alt={pack.name}
               className="download-pack-icon"
-              onError={(e) => { e.target.src = '/assets/img/favicon.png'; }}
+              onError={(e) => {
+                if (e.target.src && !e.target.src.includes('barleytxt.pl') && (pack.icon || '').startsWith('/assets/img/texturepacks/')) {
+                  e.target.src = `https://barleytxt.pl${pack.icon}`;
+                  return;
+                }
+                e.target.src = '/assets/img/favicon.png';
+              }}
             />
             <div className="download-pack-info">
               <div className="download-pack-title">{pack.name}</div>

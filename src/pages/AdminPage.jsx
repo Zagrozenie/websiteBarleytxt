@@ -26,7 +26,10 @@ import {
   EyeOff,
   Globe,
   AlertCircle,
-  Box
+  Box,
+  FileUp,
+  RefreshCw,
+  Plus
 } from 'lucide-react';
 import '../styles/admin.css';
 import { ReviewModule } from '../components/admin/review/ReviewModule';
@@ -75,7 +78,16 @@ export const AdminPage = ({ setCurrentView }) => {
   const [packVersion, setPackVersion] = useState('1.20+');
   const [packDownload, setPackDownload] = useState('');
   const [packImage, setPackImage] = useState('/assets/img/texturepack.png');
+  const [packImageFile, setPackImageFile] = useState(null);
   const [packIcon, setPackIcon] = useState('/assets/img/favicon.png');
+  const [packIconFile, setPackIconFile] = useState(null);
+  const [showCustomBgUrl, setShowCustomBgUrl] = useState(false);
+  const [showCustomIconUrl, setShowCustomIconUrl] = useState(false);
+  const [bgDragOver, setBgDragOver] = useState(false);
+  const [iconDragOver, setIconDragOver] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+
   const [packDescription, setPackDescription] = useState('');
   const [extractedInfo, setExtractedInfo] = useState(null);
 
@@ -83,8 +95,16 @@ export const AdminPage = ({ setCurrentView }) => {
   const [manageSearch, setManageSearch] = useState('');
   const [managerCategory, setManagerCategory] = useState('all');
   const [editingPack, setEditingPack] = useState(null);
+  const [editImageFile, setEditImageFile] = useState(null);
+  const [editIconFile, setEditIconFile] = useState(null);
+  const [editBgDragOver, setEditBgDragOver] = useState(false);
+  const [editIconDragOver, setEditIconDragOver] = useState(false);
 
   const fileInputRef = useRef(null);
+  const bgFileInputRef = useRef(null);
+  const iconFileInputRef = useRef(null);
+  const editBgFileInputRef = useRef(null);
+  const editIconFileInputRef = useRef(null);
   const jsonImportRef = useRef(null);
 
   const formatToVersionMap = {
@@ -165,10 +185,13 @@ export const AdminPage = ({ setCurrentView }) => {
       }
 
       let iconDataUrl = '/assets/img/favicon.png';
+      let extractedIconFile = null;
       if (iconFile) {
         try {
+          const base64 = await iconFile.async('base64');
+          iconDataUrl = `data:image/png;base64,${base64}`;
           const iconBlob = await iconFile.async('blob');
-          iconDataUrl = URL.createObjectURL(iconBlob);
+          extractedIconFile = new File([iconBlob], 'pack.png', { type: 'image/png' });
         } catch (_) { }
       }
 
@@ -187,6 +210,7 @@ export const AdminPage = ({ setCurrentView }) => {
       setPackVersion(detectedVer);
       setPackDescription(desc);
       setPackIcon(iconDataUrl);
+      setPackIconFile(extractedIconFile);
       if (!packAuthor) setPackAuthor('Barley');
 
       setExtractedInfo({
@@ -205,6 +229,63 @@ export const AdminPage = ({ setCurrentView }) => {
     }
   };
 
+  // Helper to upload image/icon file to server or fallback to Base64
+  const uploadImageToServer = async (file, packId, type) => {
+    if (!file) return null;
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('packId', packId);
+      formData.append('type', type);
+
+      const res = await fetch('/api/admin/upload-image', {
+        method: 'POST',
+        headers: {
+          'x-admin-key': adminToken
+        },
+        body: formData
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        return data.url;
+      }
+    } catch (e) {
+      console.warn('Upload na serwer nie powiódł się, zapisuję jako Data URL:', e);
+    }
+
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleBgFileChange = (file) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      addToast('Wybierz poprawny plik graficzny (PNG, WebP, JPG)', 'error');
+      return;
+    }
+    setPackImageFile(file);
+    const reader = new FileReader();
+    reader.onload = (e) => setPackImage(e.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const handleIconFileChange = (file) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      addToast('Wybierz poprawny plik graficzny dla ikony (PNG, WebP, JPG)', 'error');
+      return;
+    }
+    setPackIconFile(file);
+    const reader = new FileReader();
+    reader.onload = (e) => setPackIcon(e.target.result);
+    reader.readAsDataURL(file);
+  };
+
   const handlePublishPack = async (e) => {
     e.preventDefault();
     if (!packName.trim() || !packDownload.trim()) {
@@ -212,47 +293,123 @@ export const AdminPage = ({ setCurrentView }) => {
       return;
     }
 
-    const newPack = {
-      name: packName.trim(),
-      author: (packAuthor || 'Nieznany').trim(),
-      category: packCategory.toLowerCase().trim(),
-      version: packVersion.trim(),
-      download: packDownload.trim(),
-      image: packImage || '/assets/img/texturepack.png',
-      icon: packIcon || '/assets/img/favicon.png'
-    };
+    setIsPublishing(true);
+    try {
+      const slugId = packName.toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').trim() || `pack_${Date.now()}`;
 
-    const res = await addPack(newPack);
-    if (res.success) {
-      confetti({
-        particleCount: 120,
-        spread: 80,
-        origin: { y: 0.6 }
-      });
+      let finalImageUrl = packImage;
+      let finalIconUrl = packIcon;
 
-      // Reset form
-      setPackName('');
-      setPackDownload('');
-      setPackDescription('');
-      setExtractedInfo(null);
-      setUploadedZipFile(null);
+      // 1. Upload background image to server if file selected
+      if (packImageFile) {
+        const uploadedUrl = await uploadImageToServer(packImageFile, slugId, 'background');
+        if (uploadedUrl) finalImageUrl = uploadedUrl;
+      }
 
-      // Offer to view pack
-      setActivePack(res.pack);
+      // 2. Upload icon to server if file selected
+      if (packIconFile) {
+        const uploadedIcon = await uploadImageToServer(packIconFile, slugId, 'icon');
+        if (uploadedIcon) finalIconUrl = uploadedIcon;
+      }
+
+      const newPack = {
+        name: packName.trim(),
+        author: (packAuthor || 'Nieznany').trim(),
+        category: packCategory.toLowerCase().trim(),
+        version: packVersion.trim(),
+        download: packDownload.trim(),
+        image: finalImageUrl || '/assets/img/texturepack.png',
+        icon: finalIconUrl || '/assets/img/favicon.png'
+      };
+
+      const res = await addPack(newPack);
+      if (res.success) {
+        confetti({
+          particleCount: 120,
+          spread: 80,
+          origin: { y: 0.6 }
+        });
+
+        // Reset form
+        setPackName('');
+        setPackDownload('');
+        setPackDescription('');
+        setExtractedInfo(null);
+        setUploadedZipFile(null);
+        setPackImage('/assets/img/texturepack.png');
+        setPackImageFile(null);
+        setPackIcon('/assets/img/favicon.png');
+        setPackIconFile(null);
+
+        // Offer to view pack
+        setActivePack(res.pack);
+      }
+    } finally {
+      setIsPublishing(false);
     }
+  };
+
+  const handleEditBgFileChange = (file) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      addToast('Wybierz poprawny plik graficzny (PNG, WebP, JPG)', 'error');
+      return;
+    }
+    setEditImageFile(file);
+    const reader = new FileReader();
+    reader.onload = (e) => setEditingPack({ ...editingPack, image: e.target.result });
+    reader.readAsDataURL(file);
+  };
+
+  const handleEditIconFileChange = (file) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      addToast('Wybierz poprawny plik graficzny dla ikony (PNG, WebP, JPG)', 'error');
+      return;
+    }
+    setEditIconFile(file);
+    const reader = new FileReader();
+    reader.onload = (e) => setEditingPack({ ...editingPack, icon: e.target.result });
+    reader.readAsDataURL(file);
   };
 
   const handleEditSave = async (e) => {
     e.preventDefault();
     if (!editingPack) return;
 
-    await updatePack(editingPack.id, editingPack);
+    let finalImageUrl = editingPack.image;
+    let finalIconUrl = editingPack.icon;
+
+    if (editImageFile) {
+      const uploadedUrl = await uploadImageToServer(editImageFile, editingPack.id, 'background');
+      if (uploadedUrl) finalImageUrl = uploadedUrl;
+    }
+
+    if (editIconFile) {
+      const uploadedIconUrl = await uploadImageToServer(editIconFile, editingPack.id, 'icon');
+      if (uploadedIconUrl) finalIconUrl = uploadedIconUrl;
+    }
+
+    const updated = {
+      ...editingPack,
+      image: finalImageUrl,
+      icon: finalIconUrl
+    };
+
+    await updatePack(editingPack.id, updated);
     setEditingPack(null);
+    setEditImageFile(null);
+    setEditIconFile(null);
   };
 
-  const handleDelete = (id, name) => {
-    if (window.confirm(`Czy na pewno chcesz usunąć paczkę "${name}"?`)) {
-      deletePack(id);
+  const handleDelete = async (id, name) => {
+    if (window.confirm(`Czy na pewno chcesz bezpowrotnie usunąć paczkę "${name}"?`)) {
+      setDeletingId(id);
+      try {
+        await deletePack(id);
+      } finally {
+        setDeletingId(null);
+      }
     }
   };
 
@@ -670,26 +827,200 @@ export const AdminPage = ({ setCurrentView }) => {
                 />
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Ścieżka lub URL tła (podgląd):</label>
+              {/* Background Image Upload Card */}
+              <div className="image-uploader-card">
+                <div className="image-uploader-header">
+                  <span className="image-uploader-title">
+                    <ImageIcon size={16} />
+                    <span>Zdjęcie tła (Baner podglądu)</span>
+                  </span>
+                  {packImageFile && (
+                    <span style={{ fontSize: '0.75rem', color: '#34d399', fontWeight: 600 }}>
+                      Plik z dysku: {packImageFile.name}
+                    </span>
+                  )}
+                </div>
+
+                <div
+                  className={`image-preview-wrapper bg-aspect ${bgDragOver ? 'drag-over' : ''}`}
+                  onDragOver={(e) => { e.preventDefault(); setBgDragOver(true); }}
+                  onDragLeave={() => setBgDragOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setBgDragOver(false);
+                    if (e.dataTransfer.files?.[0]) handleBgFileChange(e.dataTransfer.files[0]);
+                  }}
+                  onClick={() => bgFileInputRef.current?.click()}
+                  style={{ cursor: 'pointer' }}
+                  title="Kliknij lub przeciągnij plik aby zmienić tło"
+                >
+                  <img
+                    src={packImage || '/assets/img/texturepack.png'}
+                    alt="Podgląd tła"
+                    className="image-preview-img"
+                    onError={(e) => {
+                      if (e.target.src && !e.target.src.includes('barleytxt.pl') && (packImage || '').startsWith('/assets/img/texturepacks/')) {
+                        e.target.src = `https://barleytxt.pl${packImage}`;
+                        return;
+                      }
+                      e.target.src = '/assets/img/texturepack.png';
+                    }}
+                  />
+                </div>
+
                 <input
-                  type="text"
-                  className="form-input"
-                  placeholder="/assets/img/texturepack.png"
-                  value={packImage}
-                  onChange={(e) => setPackImage(e.target.value)}
+                  type="file"
+                  ref={bgFileInputRef}
+                  accept="image/png,image/jpeg,image/webp,image/jpg"
+                  style={{ display: 'none' }}
+                  onChange={(e) => handleBgFileChange(e.target.files?.[0])}
                 />
+
+                <div className="image-upload-controls">
+                  <button
+                    type="button"
+                    className="image-upload-btn"
+                    onClick={() => bgFileInputRef.current?.click()}
+                  >
+                    <FileUp size={15} />
+                    <span>Wgraj plik tła z dysku</span>
+                  </button>
+
+                  {(packImageFile || (packImage && packImage !== '/assets/img/texturepack.png')) && (
+                    <button
+                      type="button"
+                      className="image-clear-btn"
+                      onClick={() => {
+                        setPackImageFile(null);
+                        setPackImage('/assets/img/texturepack.png');
+                      }}
+                      title="Przywróć domyślne tło"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  )}
+                </div>
+
+                <div>
+                  <button
+                    type="button"
+                    className="image-url-toggle"
+                    onClick={() => setShowCustomBgUrl(!showCustomBgUrl)}
+                  >
+                    {showCustomBgUrl ? 'Ukryj wpisywanie URL' : 'Lub wpisz link URL do zdjęcia...'}
+                  </button>
+                  {showCustomBgUrl && (
+                    <input
+                      type="text"
+                      className="form-input"
+                      style={{ marginTop: '0.5rem', fontSize: '0.8125rem', padding: '0.5rem 0.75rem' }}
+                      placeholder="https://... lub /assets/img/texturepack.png"
+                      value={packImage}
+                      onChange={(e) => {
+                        setPackImage(e.target.value);
+                        setPackImageFile(null);
+                      }}
+                    />
+                  )}
+                </div>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Ścieżka lub URL ikony:</label>
+              {/* Icon Upload Card */}
+              <div className="image-uploader-card">
+                <div className="image-uploader-header">
+                  <span className="image-uploader-title">
+                    <ImageIcon size={16} />
+                    <span>Ikona paczki (Awatar)</span>
+                  </span>
+                  {packIconFile && (
+                    <span style={{ fontSize: '0.75rem', color: '#34d399', fontWeight: 600 }}>
+                      {packIconFile.name === 'pack.png' ? 'Z paczki .zip' : `Plik: ${packIconFile.name}`}
+                    </span>
+                  )}
+                </div>
+
+                <div
+                  className={`image-preview-wrapper icon-aspect ${iconDragOver ? 'drag-over' : ''}`}
+                  onDragOver={(e) => { e.preventDefault(); setIconDragOver(true); }}
+                  onDragLeave={() => setIconDragOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIconDragOver(false);
+                    if (e.dataTransfer.files?.[0]) handleIconFileChange(e.dataTransfer.files[0]);
+                  }}
+                  onClick={() => iconFileInputRef.current?.click()}
+                  style={{ cursor: 'pointer' }}
+                  title="Kliknij lub przeciągnij plik aby zmienić ikonę"
+                >
+                  <img
+                    src={packIcon || '/assets/img/favicon.png'}
+                    alt="Podgląd ikony"
+                    className="icon-preview-img"
+                    onError={(e) => {
+                      if (e.target.src && !e.target.src.includes('barleytxt.pl') && (packIcon || '').startsWith('/assets/img/texturepacks/')) {
+                        e.target.src = `https://barleytxt.pl${packIcon}`;
+                        return;
+                      }
+                      e.target.src = '/assets/img/favicon.png';
+                    }}
+                  />
+                </div>
+
                 <input
-                  type="text"
-                  className="form-input"
-                  placeholder="/assets/img/favicon.png"
-                  value={packIcon}
-                  onChange={(e) => setPackIcon(e.target.value)}
+                  type="file"
+                  ref={iconFileInputRef}
+                  accept="image/png,image/jpeg,image/webp,image/jpg"
+                  style={{ display: 'none' }}
+                  onChange={(e) => handleIconFileChange(e.target.files?.[0])}
                 />
+
+                <div className="image-upload-controls">
+                  <button
+                    type="button"
+                    className="image-upload-btn"
+                    onClick={() => iconFileInputRef.current?.click()}
+                  >
+                    <FileUp size={15} />
+                    <span>Wgraj ikonę z dysku</span>
+                  </button>
+
+                  {(packIconFile || (packIcon && packIcon !== '/assets/img/favicon.png')) && (
+                    <button
+                      type="button"
+                      className="image-clear-btn"
+                      onClick={() => {
+                        setPackIconFile(null);
+                        setPackIcon('/assets/img/favicon.png');
+                      }}
+                      title="Przywróć domyślną ikonę"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  )}
+                </div>
+
+                <div>
+                  <button
+                    type="button"
+                    className="image-url-toggle"
+                    onClick={() => setShowCustomIconUrl(!showCustomIconUrl)}
+                  >
+                    {showCustomIconUrl ? 'Ukryj wpisywanie URL' : 'Lub wpisz link URL do ikony...'}
+                  </button>
+                  {showCustomIconUrl && (
+                    <input
+                      type="text"
+                      className="form-input"
+                      style={{ marginTop: '0.5rem', fontSize: '0.8125rem', padding: '0.5rem 0.75rem' }}
+                      placeholder="https://... lub /assets/img/favicon.png"
+                      value={packIcon}
+                      onChange={(e) => {
+                        setPackIcon(e.target.value);
+                        setPackIconFile(null);
+                      }}
+                    />
+                  )}
+                </div>
               </div>
             </div>
 
@@ -697,9 +1028,19 @@ export const AdminPage = ({ setCurrentView }) => {
               type="submit"
               className="btn btn-primary"
               style={{ width: '100%', padding: '1.15rem', marginTop: '2rem', fontSize: '1.05rem' }}
+              disabled={isPublishing}
             >
-              <Sparkles size={20} />
-              <span>{t.admin.uploader.publishBtn}</span>
+              {isPublishing ? (
+                <>
+                  <RefreshCw size={20} className="spin" />
+                  <span>Publikowanie i zapisywanie zdjęć...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={20} />
+                  <span>{t.admin.uploader.publishBtn}</span>
+                </>
+              )}
             </button>
           </form>
         </div>
@@ -798,7 +1139,13 @@ export const AdminPage = ({ setCurrentView }) => {
                           src={pack.icon || '/assets/img/favicon.png'}
                           alt={pack.name}
                           className="table-pack-thumb"
-                          onError={(e) => { e.target.src = '/assets/img/favicon.png'; }}
+                          onError={(e) => {
+                            if (e.target.src && !e.target.src.includes('barleytxt.pl') && (pack.icon || '').startsWith('/assets/img/texturepacks/')) {
+                              e.target.src = `https://barleytxt.pl${pack.icon}`;
+                              return;
+                            }
+                            e.target.src = '/assets/img/favicon.png';
+                          }}
                         />
                         <div>
                           <span className="table-pack-name">{pack.name}</span>
@@ -833,9 +1180,10 @@ export const AdminPage = ({ setCurrentView }) => {
                           type="button"
                           className="action-btn action-btn-delete"
                           onClick={() => handleDelete(pack.id, pack.name)}
-                          title="Usuń paczkę"
+                          disabled={deletingId === pack.id}
+                          title="Usuń paczkę bezpowrotnie"
                         >
-                          <Trash2 size={15} />
+                          {deletingId === pack.id ? <RefreshCw size={15} className="spin" /> : <Trash2 size={15} />}
                         </button>
                       </div>
                     </td>
@@ -989,24 +1337,156 @@ export const AdminPage = ({ setCurrentView }) => {
                   />
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label">URL podglądu tła:</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={editingPack.image || ''}
-                    onChange={(e) => setEditingPack({ ...editingPack, image: e.target.value })}
-                  />
-                </div>
+                <div className="admin-image-upload-grid" style={{ marginTop: '1.25rem' }}>
+                  {/* Edit Background Image Card */}
+                  <div className="image-uploader-card">
+                    <div className="image-uploader-header">
+                      <span className="image-uploader-title">
+                        <ImageIcon size={16} />
+                        <span>Zdjęcie tła (Baner)</span>
+                      </span>
+                      {editImageFile && (
+                        <span style={{ fontSize: '0.75rem', color: '#34d399', fontWeight: 600 }}>
+                          Plik: {editImageFile.name}
+                        </span>
+                      )}
+                    </div>
 
-                <div className="form-group">
-                  <label className="form-label">URL ikony:</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={editingPack.icon || ''}
-                    onChange={(e) => setEditingPack({ ...editingPack, icon: e.target.value })}
-                  />
+                    <div
+                      className={`image-preview-wrapper bg-aspect ${editBgDragOver ? 'drag-over' : ''}`}
+                      onDragOver={(e) => { e.preventDefault(); setEditBgDragOver(true); }}
+                      onDragLeave={() => setEditBgDragOver(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setEditBgDragOver(false);
+                        if (e.dataTransfer.files?.[0]) handleEditBgFileChange(e.dataTransfer.files[0]);
+                      }}
+                      onClick={() => editBgFileInputRef.current?.click()}
+                      style={{ cursor: 'pointer' }}
+                      title="Kliknij lub przeciągnij plik aby zmienić tło"
+                    >
+                      <img
+                        src={editingPack.image || '/assets/img/texturepack.png'}
+                        alt="Podgląd tła"
+                        className="image-preview-img"
+                        onError={(e) => {
+                          if (e.target.src && !e.target.src.includes('barleytxt.pl') && (editingPack.image || '').startsWith('/assets/img/texturepacks/')) {
+                            e.target.src = `https://barleytxt.pl${editingPack.image}`;
+                            return;
+                          }
+                          e.target.src = '/assets/img/texturepack.png';
+                        }}
+                      />
+                    </div>
+
+                    <input
+                      type="file"
+                      ref={editBgFileInputRef}
+                      accept="image/png,image/jpeg,image/webp,image/jpg"
+                      style={{ display: 'none' }}
+                      onChange={(e) => handleEditBgFileChange(e.target.files?.[0])}
+                    />
+
+                    <div className="image-upload-controls">
+                      <button
+                        type="button"
+                        className="image-upload-btn"
+                        onClick={() => editBgFileInputRef.current?.click()}
+                      >
+                        <FileUp size={15} />
+                        <span>Wgraj nowe tło z dysku</span>
+                      </button>
+                    </div>
+
+                    <div>
+                      <input
+                        type="text"
+                        className="form-input"
+                        style={{ fontSize: '0.8125rem', padding: '0.5rem 0.75rem' }}
+                        placeholder="Lub podaj URL /assets/..."
+                        value={editingPack.image || ''}
+                        onChange={(e) => {
+                          setEditingPack({ ...editingPack, image: e.target.value });
+                          setEditImageFile(null);
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Edit Icon Card */}
+                  <div className="image-uploader-card">
+                    <div className="image-uploader-header">
+                      <span className="image-uploader-title">
+                        <ImageIcon size={16} />
+                        <span>Ikona paczki</span>
+                      </span>
+                      {editIconFile && (
+                        <span style={{ fontSize: '0.75rem', color: '#34d399', fontWeight: 600 }}>
+                          Plik: {editIconFile.name}
+                        </span>
+                      )}
+                    </div>
+
+                    <div
+                      className={`image-preview-wrapper icon-aspect ${editIconDragOver ? 'drag-over' : ''}`}
+                      onDragOver={(e) => { e.preventDefault(); setEditIconDragOver(true); }}
+                      onDragLeave={() => setEditIconDragOver(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setEditIconDragOver(false);
+                        if (e.dataTransfer.files?.[0]) handleEditIconFileChange(e.dataTransfer.files[0]);
+                      }}
+                      onClick={() => editIconFileInputRef.current?.click()}
+                      style={{ cursor: 'pointer' }}
+                      title="Kliknij lub przeciągnij plik aby zmienić ikonę"
+                    >
+                      <img
+                        src={editingPack.icon || '/assets/img/favicon.png'}
+                        alt="Podgląd ikony"
+                        className="icon-preview-img"
+                        onError={(e) => {
+                          if (e.target.src && !e.target.src.includes('barleytxt.pl') && (editingPack.icon || '').startsWith('/assets/img/texturepacks/')) {
+                            e.target.src = `https://barleytxt.pl${editingPack.icon}`;
+                            return;
+                          }
+                          e.target.src = '/assets/img/favicon.png';
+                        }}
+                      />
+                    </div>
+
+                    <input
+                      type="file"
+                      ref={editIconFileInputRef}
+                      accept="image/png,image/jpeg,image/webp,image/jpg"
+                      style={{ display: 'none' }}
+                      onChange={(e) => handleEditIconFileChange(e.target.files?.[0])}
+                    />
+
+                    <div className="image-upload-controls">
+                      <button
+                        type="button"
+                        className="image-upload-btn"
+                        onClick={() => editIconFileInputRef.current?.click()}
+                      >
+                        <FileUp size={15} />
+                        <span>Wgraj nową ikonę z dysku</span>
+                      </button>
+                    </div>
+
+                    <div>
+                      <input
+                        type="text"
+                        className="form-input"
+                        style={{ fontSize: '0.8125rem', padding: '0.5rem 0.75rem' }}
+                        placeholder="Lub podaj URL /assets/..."
+                        value={editingPack.icon || ''}
+                        onChange={(e) => {
+                          setEditingPack({ ...editingPack, icon: e.target.value });
+                          setEditIconFile(null);
+                        }}
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>

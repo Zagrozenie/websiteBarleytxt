@@ -423,7 +423,7 @@ app.get("/total-downloads", async (req, res) => {
     try {
       const localStats = JSON.parse(fs.readFileSync(path.join(__dirname, "pack_downloads.json"), "utf8"));
       totalDownloads = Object.values(localStats).reduce((a, b) => a + b, 0);
-    } catch (_) {}
+    } catch (_) { }
     res.json({ totalDownloads });
 
   } catch (error) {
@@ -791,26 +791,40 @@ const ADMIN_SECRET = process.env.ADMIN_KEY || "barleyadmin2024";
 
 function getLocalPacks() {
   const backendPacksPath = path.join(__dirname, "texturepacks.json");
-  const rootPacksPath = path.join(__dirname, "..", "texturepacks.json");
-  let filePath = fs.existsSync(backendPacksPath) ? backendPacksPath : rootPacksPath;
-  try {
-    const raw = fs.readFileSync(filePath, "utf8");
-    return JSON.parse(raw);
-  } catch (e) {
-    return [];
+  const publicPacksPath = path.join(WEBSITE_ROOT, "public", "texturepacks.json");
+  const rootPacksPath = path.join(WEBSITE_ROOT, "texturepacks.json");
+
+  const candidates = [backendPacksPath, publicPacksPath, rootPacksPath];
+  for (const filePath of candidates) {
+    if (fs.existsSync(filePath)) {
+      try {
+        const raw = fs.readFileSync(filePath, "utf8");
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      } catch (_) { }
+    }
   }
+  return [];
 }
 
 function saveLocalPacks(packs) {
   const data = JSON.stringify(packs, null, 2);
-  const backendPacksPath = path.join(__dirname, "texturepacks.json");
-  const rootPacksPath = path.join(__dirname, "..", "texturepacks.json");
-  try {
-    fs.writeFileSync(backendPacksPath, data, "utf8");
-  } catch (_) { }
-  try {
-    fs.writeFileSync(rootPacksPath, data, "utf8");
-  } catch (_) { }
+  const targets = [
+    path.join(__dirname, "texturepacks.json"),
+    path.join(WEBSITE_ROOT, "public", "texturepacks.json"),
+    path.join(WEBSITE_ROOT, "texturepacks.json"),
+    path.join(WEBSITE_ROOT, "dist", "texturepacks.json")
+  ];
+  for (const targetPath of targets) {
+    try {
+      const parentDir = path.dirname(targetPath);
+      if (fs.existsSync(parentDir)) {
+        fs.writeFileSync(targetPath, data, "utf8");
+      }
+    } catch (_) { }
+  }
 }
 
 function requireAdmin(req, res, next) {
@@ -848,11 +862,11 @@ app.get("/api/packs", async (req, res) => {
       });
       return res.json(enriched);
     }
-    
+
     let localStats = {};
     try {
       localStats = JSON.parse(fs.readFileSync(path.join(__dirname, "pack_downloads.json"), "utf8"));
-    } catch (_) {}
+    } catch (_) { }
     const enriched = packs.map((p) => ({
       ...p,
       downloads: localStats[p.id] || 0,
@@ -876,7 +890,7 @@ app.get("/api/packs/popular", async (req, res) => {
       try {
         const localStats = JSON.parse(fs.readFileSync(path.join(__dirname, "pack_downloads.json"), "utf8"));
         statsMap = new Map(Object.entries(localStats).map(([id, dl]) => [id, { downloads: dl, views: 0 }]));
-      } catch (_) {}
+      } catch (_) { }
     }
     const enriched = packs.map((p) => {
       const s = statsMap.get(p.id);
@@ -987,6 +1001,58 @@ app.post("/api/admin/upload-pack", requireAdmin, upload.single("packFile"), asyn
   }
 });
 
+// Admin upload pack image (background or icon) with permanent disk storage
+app.post("/api/admin/upload-image", requireAdmin, upload.single("image"), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "Brak przesłanego pliku graficznego" });
+    }
+
+    const packId = (req.body.packId || `pack_${Date.now()}`)
+      .toString()
+      .trim()
+      .replace(/[^\w\s-]/gi, "")
+      .replace(/\s+/g, "_")
+      .toLowerCase();
+
+    const type = req.body.type === "icon" ? "icon" : "background";
+
+    let ext = path.extname(req.file.originalname || "").toLowerCase();
+    if (![".png", ".webp", ".jpg", ".jpeg"].includes(ext)) {
+      ext = ".png";
+    }
+
+    const fileName = `${type}${ext}`;
+
+    const targetDirs = [
+      path.join(WEBSITE_ROOT, "public", "assets", "img", "texturepacks", packId),
+      path.join(WEBSITE_ROOT, "assets", "img", "texturepacks", packId)
+    ];
+
+    for (const dir of targetDirs) {
+      try {
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+        fs.writeFileSync(path.join(dir, fileName), req.file.buffer);
+      } catch (e) {
+        console.warn("Nie udało się zapisać zdjęcia w:", dir, e.message);
+      }
+    }
+
+    const publicUrl = `/assets/img/texturepacks/${packId}/${fileName}`;
+    return res.json({
+      success: true,
+      url: publicUrl,
+      fileName,
+      packId
+    });
+  } catch (err) {
+    console.error("Image upload error:", err);
+    res.status(500).json({ error: "Błąd podczas zapisywania zdjęcia: " + err.message });
+  }
+});
+
 app.post("/api/admin/packs", requireAdmin, (req, res) => {
   try {
     const { name, author, version, category, download, image, icon } = req.body;
@@ -1027,7 +1093,7 @@ app.put("/api/admin/packs/:id", requireAdmin, (req, res) => {
   try {
     const packId = req.params.id;
     const packs = getLocalPacks();
-    const index = packs.findIndex(p => p.id === packId);
+    const index = packs.findIndex(p => p.id === packId || p.id?.toLowerCase() === packId.toLowerCase());
 
     if (index === -1) {
       return res.status(404).json({ error: "Nie znaleziono paczki" });
@@ -1036,7 +1102,7 @@ app.put("/api/admin/packs/:id", requireAdmin, (req, res) => {
     const updated = {
       ...packs[index],
       ...req.body,
-      id: packId
+      id: packs[index].id
     };
 
     packs[index] = updated;
@@ -1048,20 +1114,63 @@ app.put("/api/admin/packs/:id", requireAdmin, (req, res) => {
   }
 });
 
-app.delete("/api/admin/packs/:id", requireAdmin, (req, res) => {
+app.delete("/api/admin/packs/:id", requireAdmin, async (req, res) => {
   try {
-    const packId = req.params.id;
+    const rawId = req.params.id;
+    const packId = decodeURIComponent(rawId).trim();
+    const cleanId = packId.toLowerCase().replace(/[-_ ]/g, "");
+
     let packs = getLocalPacks();
     const initialLen = packs.length;
-    packs = packs.filter(p => p.id !== packId);
+
+    packs = packs.filter((p) => {
+      if (!p) return false;
+      const pid = (p.id || "").toString().trim();
+      const pidLower = pid.toLowerCase();
+      const pidClean = pidLower.replace(/[-_ ]/g, "");
+      return pid !== packId && pidLower !== packId.toLowerCase() && pidClean !== cleanId;
+    });
 
     if (packs.length === initialLen) {
       return res.status(404).json({ error: "Nie znaleziono paczki o podanym ID" });
     }
 
     saveLocalPacks(packs);
+
+    // Usuń przypisany folder ze zdjęciami, jeśli istniał
+    const safePackId = packId.replace(/[^\w\s-]/gi, "").replace(/\s+/g, "_").toLowerCase();
+    const dirsToDelete = [
+      path.join(WEBSITE_ROOT, "public", "assets", "img", "texturepacks", safePackId),
+      path.join(WEBSITE_ROOT, "assets", "img", "texturepacks", safePackId)
+    ];
+    for (const d of dirsToDelete) {
+      try {
+        if (fs.existsSync(d)) {
+          fs.rmSync(d, { recursive: true, force: true });
+        }
+      } catch (_) { }
+    }
+
+    // Wyczyść statystyki pobrań
+    try {
+      const statsFile = path.join(__dirname, "pack_downloads.json");
+      if (fs.existsSync(statsFile)) {
+        const stats = JSON.parse(fs.readFileSync(statsFile, "utf8"));
+        delete stats[packId];
+        delete stats[rawId];
+        fs.writeFileSync(statsFile, JSON.stringify(stats, null, 2), "utf8");
+      }
+    } catch (_) { }
+
+    if (mongoose.connection.readyState === 1) {
+      try {
+        await Stat.deleteMany({ packId: { $in: [packId, rawId] } });
+      } catch (_) { }
+    }
+
     res.json({ success: true, id: packId, remainingCount: packs.length });
   } catch (err) {
+    console.error("Pack delete error:", err);
     res.status(500).json({ error: "Błąd podczas usuwania paczki" });
   }
 });
@@ -1085,7 +1194,7 @@ app.get("/stats/:packId", checkOrigin, async (req, res) => {
     try {
       const localStats = JSON.parse(fs.readFileSync(path.join(__dirname, "pack_downloads.json"), "utf8"));
       dl = localStats[req.params.packId] || 0;
-    } catch (_) {}
+    } catch (_) { }
 
     res.json({
       views: 0,
